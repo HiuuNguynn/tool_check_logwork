@@ -1,0 +1,232 @@
+import { eachDay, isWeekend, toDateKey, weekdayOf } from "./date";
+import type {
+  AcmsDailyData,
+  BacklogIssue,
+  DailyRow,
+  DayStatus,
+  FieldMapping,
+  IssueRow,
+  RuleViolation,
+  SourceMatchStatus,
+} from "./types";
+
+/** "Re-estimate hours" / "re_estimate hours" / "Re Estimate Hours" -> "reestimatehours" */
+function normalizeFieldName(name: string): string {
+  return name.toLowerCase().replace(/[\s_\-–—/.()]+/g, "");
+}
+
+function findCustomField(issue: BacklogIssue, wanted: string) {
+  const target = normalizeFieldName(wanted);
+  if (!target) return undefined;
+  return issue.customFields?.find(
+    (field) => normalizeFieldName(field.name) === target,
+  );
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/** So sánh giờ với dung sai nhỏ để tránh sai số dấu phẩy động (7.5 vs 7.50). */
+function sameHours(a: number, b: number): boolean {
+  return Math.abs(a - b) < 0.001;
+}
+
+export function checkRules(row: Omit<IssueRow, "violations">): RuleViolation[] {
+  const violations: RuleViolation[] = [];
+
+  const dates: [string, string | null][] = [
+    ["Start Date", row.startDate],
+    ["Due Date", row.dueDate],
+  ];
+  if (row.supportsActualEnd) dates.push(["Actual End-date", row.actualEndDate]);
+
+  const missingDates = dates.filter(([, value]) => !value).map(([label]) => label);
+  if (missingDates.length) {
+    violations.push({
+      code: "MISSING_DATE",
+      message: `Chưa điền: ${missingDates.join(", ")}`,
+    });
+  } else if (new Set(dates.map(([, value]) => value)).size > 1) {
+    violations.push({
+      code: "DATE_MISMATCH",
+      message: `${dates.map(([label]) => label).join(" / ")} phải bằng nhau`,
+    });
+  }
+
+  // Chỉ bắt buộc Actual Hours = Re-estimate Hours. Estimate Hours vẫn hiển thị
+  // để tham khảo nhưng không nằm trong rule so khớp.
+  const hours: [string, number | null][] = [["Actual Hours", row.actualHours]];
+  if (row.supportsReEstimate) {
+    hours.push(["Re-estimate Hours", row.reEstimateHours]);
+  }
+
+  const missingHours = hours
+    .filter(([, value]) => value === null)
+    .map(([label]) => label);
+  if (missingHours.length) {
+    violations.push({
+      code: "MISSING_HOURS",
+      message: `Chưa điền: ${missingHours.join(", ")}`,
+    });
+  } else {
+    const values = hours.map(([, value]) => value as number);
+    if (!values.every((value) => sameHours(value, values[0]))) {
+      violations.push({
+        code: "HOURS_MISMATCH",
+        message: `${hours.map(([label]) => label).join(" / ")} phải bằng nhau`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+export function toIssueRow(
+  issue: BacklogIssue,
+  mapping: FieldMapping,
+): IssueRow {
+  const reEstimateField = findCustomField(issue, mapping.reEstimateHours);
+  const actualEndField = findCustomField(issue, mapping.actualEndDate);
+
+  const startDate = toDateKey(issue.startDate);
+  const dueDate = toDateKey(issue.dueDate);
+  const actualEndDate = toDateKey(actualEndField?.value);
+
+  const base: Omit<IssueRow, "violations"> = {
+    id: issue.id,
+    issueKey: issue.issueKey,
+    summary: issue.summary,
+    projectId: issue.projectId,
+    statusName: issue.status?.name ?? "",
+    issueTypeName: issue.issueType?.name ?? "",
+    assigneeName: issue.assignee?.name ?? "(chưa gán)",
+    assigneeId: issue.assignee?.id ?? null,
+    startDate,
+    dueDate,
+    actualEndDate,
+    estimatedHours: toNumber(issue.estimatedHours),
+    actualHours: toNumber(issue.actualHours),
+    reEstimateHours: toNumber(reEstimateField?.value),
+    supportsReEstimate: reEstimateField !== undefined,
+    supportsActualEnd: actualEndField !== undefined,
+    // Ưu tiên ngày kết thúc thực tế; thiếu thì lùi về due date rồi start date.
+    workDate: actualEndDate ?? dueDate ?? startDate,
+  };
+
+  return { ...base, violations: checkRules(base) };
+}
+
+export function inRange(
+  dateKey: string | null,
+  from: string,
+  to: string,
+): boolean {
+  return !!dateKey && dateKey >= from && dateKey <= to;
+}
+
+export type BuildDailyOptions = {
+  from: string;
+  to: string;
+  targetHours: number;
+  includeEmptyDays: boolean;
+  includeWeekends: boolean;
+  /** null = chưa cấu hình ACMS token, không đối chiếu 3 nguồn. */
+  acmsData: AcmsDailyData | null;
+};
+
+export function buildDailyRows(
+  rows: IssueRow[],
+  options: BuildDailyOptions,
+): DailyRow[] {
+  const grouped = new Map<string, IssueRow[]>();
+  for (const row of rows) {
+    if (!row.workDate) continue;
+    const bucket = grouped.get(row.workDate);
+    if (bucket) bucket.push(row);
+    else grouped.set(row.workDate, [row]);
+  }
+
+  const dates = options.includeEmptyDays
+    ? eachDay(options.from, options.to)
+    : [...grouped.keys()].sort();
+
+  return dates
+    .filter((date) => options.includeWeekends || !isWeekend(date))
+    .map((date) => {
+      const dayRows = grouped.get(date) ?? [];
+      const totalActual = sum(dayRows.map((row) => row.actualHours));
+      const totalEstimate = sum(dayRows.map((row) => row.estimatedHours));
+      const attendanceHours = options.acmsData
+        ? round2(options.acmsData.attendance[date] ?? 0)
+        : null;
+      const projectToolHours = options.acmsData
+        ? round2(options.acmsData.projectTool[date] ?? 0)
+        : null;
+
+      return {
+        date,
+        weekday: weekdayOf(date),
+        isWeekend: isWeekend(date),
+        rows: dayRows,
+        totalActual,
+        totalEstimate,
+        diff: round2(totalActual - options.targetHours),
+        status: dayStatus(
+          totalActual,
+          options.targetHours,
+          dayRows.length,
+          isWeekend(date),
+        ),
+        attendanceHours,
+        projectToolHours,
+        sourceMatch: sourceMatchStatus(
+          totalActual,
+          attendanceHours,
+          projectToolHours,
+        ),
+      };
+    });
+}
+
+function sourceMatchStatus(
+  backlogHours: number,
+  attendanceHours: number | null,
+  projectToolHours: number | null,
+): SourceMatchStatus {
+  if (attendanceHours === null || projectToolHours === null) return "unavailable";
+  const match =
+    sameHours(backlogHours, attendanceHours) &&
+    sameHours(backlogHours, projectToolHours);
+  return match ? "match" : "mismatch";
+}
+
+function dayStatus(
+  totalActual: number,
+  targetHours: number,
+  ticketCount: number,
+  weekend: boolean,
+): DayStatus {
+  // Ngày làm việc chưa log giờ nào vẫn là thiếu giờ; chỉ T7/CN mới được bỏ qua.
+  if (ticketCount === 0) return weekend ? "empty" : "under";
+  if (sameHours(totalActual, targetHours)) return "ok";
+  return totalActual < targetHours ? "under" : "over";
+}
+
+export function sum(values: (number | null)[]): number {
+  return round2(values.reduce<number>((acc, value) => acc + (value ?? 0), 0));
+}
+
+export function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+export function formatHours(value: number | null): string {
+  if (value === null) return "—";
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}

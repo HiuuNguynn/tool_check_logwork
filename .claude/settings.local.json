@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(update-config)",
+      "Bash(awk -F'|' 'NR>2 {gsub\\(/^[ \\\\t]+|[ \\\\t]+$/,\"\",$3\\); print $3}' \"/home/hieu/Documents/Amela/IPP/docs_agent/md_m_jusetsu_part_field_202605191735 1.md\")",
+      "Bash(awk '-F|' '{for\\(i=1;i<=NF;i++\\) print i\": [\"$i\"]\"}')",
+      "mcp__ide__getDiagnostics",
+      "Bash(sed -n '4276,4284p' \"views/Jusetsu\\(M006-01\\).vue\")",
+      "Bash(sed -n '418,427p' mixins/utilitiesMethods.js)",
+      "Bash(gh pr *)",
+      "mcp__gitnexus__list_repos"
+    ]
+  }
+}
