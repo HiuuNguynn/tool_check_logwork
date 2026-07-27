@@ -21,7 +21,9 @@ tổng hợp nhiều ticket con — hours của nó là cộng dồn nên tính 
 ### Rule được kiểm tra
 
 1. `Start Date` = `Due Date` = `Actual End-date`
-2. `Actual Hours` = `Re-estimate hours` (`Estimate Hours` chỉ hiển thị tham khảo, không bắt buộc bằng)
+2. Nếu `Estimate Hours` = `Actual Hours` (làm đúng dự tính) thì không cần check gì thêm.
+   Nếu khác nhau (hoặc chưa có Estimate) thì bắt buộc `Re-estimate hours` = `Actual Hours`
+   — tức khi phát sinh chênh lệch, phải cập nhật lại số giờ ước tính cho khớp thực tế.
 3. Mỗi ngày làm việc phải đủ **8h** (số giờ chuẩn đổi được trong Cài đặt)
 4. Theo ngày: **Actual Hours (Backlog) = Time dự án (ACMS) = Chấm công (ACMS)** —
    chỉ áp dụng khi đã cấu hình ACMS token, xem [ACMS token](#acms-token-chấm-công--time-dự-án)

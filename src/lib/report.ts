@@ -59,28 +59,31 @@ export function checkRules(row: Omit<IssueRow, "violations">): RuleViolation[] {
     });
   }
 
-  // Chỉ bắt buộc Actual Hours = Re-estimate Hours. Estimate Hours vẫn hiển thị
-  // để tham khảo nhưng không nằm trong rule so khớp.
-  const hours: [string, number | null][] = [["Actual Hours", row.actualHours]];
-  if (row.supportsReEstimate) {
-    hours.push(["Re-estimate Hours", row.reEstimateHours]);
-  }
-
-  const missingHours = hours
-    .filter(([, value]) => value === null)
-    .map(([label]) => label);
-  if (missingHours.length) {
+  // Actual Hours luôn bắt buộc có giá trị.
+  if (row.actualHours === null) {
     violations.push({
       code: "MISSING_HOURS",
-      message: `Chưa điền: ${missingHours.join(", ")}`,
+      message: "Chưa điền: Actual Hours",
     });
-  } else {
-    const values = hours.map(([, value]) => value as number);
-    if (!values.every((value) => sameHours(value, values[0]))) {
-      violations.push({
-        code: "HOURS_MISMATCH",
-        message: `${hours.map(([label]) => label).join(" / ")} phải bằng nhau`,
-      });
+  } else if (row.supportsReEstimate) {
+    // Estimate = Actual nghĩa là làm đúng dự tính, không cần re-estimate.
+    // Chỉ khi phát sinh chênh lệch (Estimate ≠ Actual, hoặc chưa có Estimate)
+    // mới bắt buộc Re-estimate phải cập nhật đúng bằng Actual.
+    const estimateMatchesActual =
+      row.estimatedHours !== null && sameHours(row.estimatedHours, row.actualHours);
+
+    if (!estimateMatchesActual) {
+      if (row.reEstimateHours === null) {
+        violations.push({
+          code: "MISSING_HOURS",
+          message: "Chưa điền: Re-estimate Hours (Estimate khác Actual)",
+        });
+      } else if (!sameHours(row.actualHours, row.reEstimateHours)) {
+        violations.push({
+          code: "HOURS_MISMATCH",
+          message: "Actual Hours / Re-estimate Hours phải bằng nhau (Estimate khác Actual)",
+        });
+      }
     }
   }
 
