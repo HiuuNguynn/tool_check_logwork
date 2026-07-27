@@ -15,8 +15,8 @@ với mốc 8h/ngày, và nếu có cấu hình ACMS token thì đối chiếu t
 (tool báo cáo công việc ACMS) và **Chấm công** (hệ thống chấm công ACMS). Bấm vào một
 ngày để xem danh sách ticket của ngày đó.
 
-Tool chỉ thống kê **child-ticket** (ticket có `parentIssueId`, tức đang là con của một
-ticket khác). Ticket cha và ticket độc lập (không cha không con) không được tính.
+Tool lấy **tất cả loại ticket**, chỉ loại trừ **GTask** (ticket gộp/umbrella dùng để
+tổng hợp nhiều ticket con — hours của nó là cộng dồn nên tính riêng sẽ bị trùng lặp).
 
 ### Rule được kiểm tra
 

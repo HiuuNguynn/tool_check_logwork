@@ -152,6 +152,14 @@ export type IssueQuery = {
   until: string | null;
 };
 
+/** "GTask" / "G-Task" / "g task" đều coi là ticket gộp, không tính vào logwork. */
+function isGroupTask(issue: BacklogIssue): boolean {
+  const normalized = (issue.issueType?.name ?? "")
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+  return normalized === "gtask";
+}
+
 /**
  * Backlog không lọc được theo "Actual End-date" (custom field), và một ticket sai
  * rule có thể lệch giữa startDate/dueDate. Nên gộp kết quả của hai truy vấn
@@ -165,9 +173,6 @@ export async function fetchIssues(
     "projectId[]": query.projectIds,
     "assigneeId[]": query.assigneeIds,
     "statusId[]": query.statusIds.length ? query.statusIds : [1, 2, 3, 4],
-    // 2 = chỉ lấy ticket con (có parentIssueId). Loại cả ticket cha lẫn
-    // ticket độc lập (không cha không con) theo yêu cầu chỉ thống kê child-ticket.
-    parentChild: 2,
   };
 
   const ranges: Query[] = query.since && query.until
@@ -186,9 +191,13 @@ export async function fetchIssues(
     for (const issue of result.issues) byId.set(issue.id, issue);
   }
 
+  // Lấy tất cả các loại ticket, chỉ loại trừ GTask (ticket gộp/umbrella dùng để
+  // tổng hợp — hours của nó là cộng dồn từ các ticket con nên không tính riêng).
+  const issues = [...byId.values()].filter((issue) => !isGroupTask(issue));
+
   return {
-    issues: [...byId.values()],
+    issues,
     truncated,
-    fetched: byId.size,
+    fetched: issues.length,
   };
 }

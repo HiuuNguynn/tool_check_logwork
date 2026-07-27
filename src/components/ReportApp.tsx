@@ -65,9 +65,9 @@ export function ReportApp() {
   const [tab, setTab] = useState<Tab>("daily");
 
   // URL đã có bộ lọc từ trước (VD sau khi F5) → giữ nguyên lựa chọn người
-  // thực hiện thay vì tự động chọn lại "chính mình", và tự chạy report luôn.
+  // thực hiện thay vì tự động chọn lại "chính mình".
   const assigneeInitialized = useRef(searchParams.has("assigneeIds"));
-  const autoRunPending = useRef(searchParams.has("from"));
+  const autoRunTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Đồng bộ mỗi lần đổi bộ lọc lên URL query params để F5 không mất lựa chọn.
   useEffect(() => {
@@ -197,14 +197,27 @@ export function ReportApp() {
     setLoading(false);
   }, [filters, settings]);
 
-  // URL đã mang sẵn bộ lọc từ trước (F5) → tự chạy lại report một lần khi đã
-  // xác thực xong, thay vì bắt bấm "Thống kê" lại từ đầu.
+  // Mỗi lần đổi bộ lọc (kể cả lần khôi phục từ URL sau F5) tự chạy lại report
+  // sau một nhịp ngắn, không bắt phải bấm nút "Thống kê" — nút vẫn giữ để
+  // người dùng chủ động chạy lại ngay lập tức khi cần.
   useEffect(() => {
-    if (autoRunPending.current && me) {
-      autoRunPending.current = false;
+    if (!me) return;
+    autoRunTimeout.current = setTimeout(() => {
+      autoRunTimeout.current = null;
       runReport();
+    }, 500);
+    return () => {
+      if (autoRunTimeout.current) clearTimeout(autoRunTimeout.current);
+    };
+  }, [filters, me, runReport]);
+
+  function runReportNow() {
+    if (autoRunTimeout.current) {
+      clearTimeout(autoRunTimeout.current);
+      autoRunTimeout.current = null;
     }
-  }, [me, runReport]);
+    runReport();
+  }
 
   const rows = useMemo(() => {
     if (!issues) return [];
@@ -331,7 +344,7 @@ export function ReportApp() {
         users={users}
         usersLoading={usersLoading}
         loading={loading}
-        onSubmit={runReport}
+        onSubmit={runReportNow}
       />
 
       {error && (
