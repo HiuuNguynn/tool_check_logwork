@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AttendanceCompareTable } from "./AttendanceCompareTable";
-import { DailyTable } from "./DailyTable";
+import { DailyTable, leaveLabel } from "./DailyTable";
 import {
   defaultFilters,
   FilterBar,
@@ -298,6 +298,7 @@ export function ReportApp() {
         "Lệch",
         "Kết quả",
         "Đối chiếu 3 nguồn",
+        "Nghỉ",
         "Danh sách key",
       ],
       dailyRows.map((day) => [
@@ -310,6 +311,7 @@ export function ReportApp() {
         day.diff,
         day.status,
         day.sourceMatch,
+        leaveLabel(day.leaveType),
         day.rows.map((row) => row.issueKey).join(" "),
       ]),
     );
@@ -468,6 +470,7 @@ function Legend({ targetHours }: { targetHours: number }) {
       <LegendDot className="bg-rose-200" label={`Thiếu giờ / sai rule / lệch 3 nguồn`} />
       <LegendDot className="bg-amber-200" label="Dư giờ" />
       <LegendDot className="bg-slate-200" label="Chưa log giờ" />
+      <LegendDot className="bg-sky-200" label="Nghỉ lễ / nghỉ phép" />
     </div>
   );
 }

@@ -4,7 +4,15 @@ import { Fragment, useState } from "react";
 
 import { weekdayLabel } from "@/lib/date";
 import { formatHours } from "@/lib/report";
-import type { DailyRow, DayStatus, SourceMatchStatus } from "@/lib/types";
+import type { DailyRow, DayStatus, LeaveType, SourceMatchStatus } from "@/lib/types";
+
+/** Không có field "nghỉ lễ" riêng trong ACMS nên nhãn cụ thể phải suy từ leaveType. */
+export function leaveLabel(leaveType: LeaveType): string {
+  if (leaveType === "holiday") return "Nghỉ lễ";
+  if (leaveType === "paid_leave") return "Nghỉ phép";
+  if (leaveType === "unpaid_leave") return "Nghỉ không lương";
+  return "";
+}
 
 type Props = {
   days: DailyRow[];
@@ -19,6 +27,7 @@ export const sourceMatchStyle: Record<
   match: { badge: "bg-emerald-100 text-emerald-800", text: "Khớp" },
   mismatch: { badge: "bg-rose-100 text-rose-800", text: "Lệch" },
   unavailable: { badge: "bg-slate-200 text-slate-500", text: "Chưa cấu hình" },
+  leave: { badge: "bg-sky-100 text-sky-800", text: "Nghỉ" },
 };
 
 const statusStyle: Record<DayStatus, { row: string; badge: string; text: string }> =
@@ -42,6 +51,11 @@ const statusStyle: Record<DayStatus, { row: string; badge: string; text: string 
       row: "bg-slate-50",
       badge: "bg-slate-200 text-slate-600",
       text: "Chưa log",
+    },
+    leave: {
+      row: "bg-sky-50",
+      badge: "bg-sky-100 text-sky-800",
+      text: "Nghỉ",
     },
   };
 
@@ -133,7 +147,7 @@ export function DailyTable({ days, domain, targetHours }: Props) {
                   <td
                     className={`px-3 py-2 text-right tabular-nums ${day.diff === 0 ? "text-slate-500" : "font-semibold"}`}
                   >
-                    {day.status === "empty"
+                    {day.status === "empty" || day.status === "leave"
                       ? "—"
                       : `${day.diff > 0 ? "+" : ""}${formatHours(day.diff)}`}
                   </td>
@@ -141,18 +155,22 @@ export function DailyTable({ days, domain, targetHours }: Props) {
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${style.badge}`}
                     >
-                      {day.rows.length === 0
-                        ? day.isWeekend
-                          ? "Cuối tuần"
-                          : "Chưa log giờ"
-                        : style.text}
+                      {day.status === "leave"
+                        ? leaveLabel(day.leaveType)
+                        : day.rows.length === 0
+                          ? day.isWeekend
+                            ? "Cuối tuần"
+                            : "Chưa log giờ"
+                          : style.text}
                     </span>
                   </td>
                   <td className="px-3 py-2">
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${sourceMatchStyle[day.sourceMatch].badge}`}
                     >
-                      {sourceMatchStyle[day.sourceMatch].text}
+                      {day.sourceMatch === "leave"
+                        ? leaveLabel(day.leaveType)
+                        : sourceMatchStyle[day.sourceMatch].text}
                     </span>
                   </td>
                 </tr>

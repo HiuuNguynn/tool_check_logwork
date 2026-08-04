@@ -81,10 +81,17 @@ export type IssueRow = {
   violations: RuleViolation[];
 };
 
-export type DayStatus = "ok" | "under" | "over" | "empty";
+export type DayStatus = "ok" | "under" | "over" | "empty" | "leave";
 
 /** null = chưa cấu hình ACMS token nên không có dữ liệu để đối chiếu. */
-export type SourceMatchStatus = "match" | "mismatch" | "unavailable";
+export type SourceMatchStatus = "match" | "mismatch" | "unavailable" | "leave";
+
+/**
+ * Loại ngày nghỉ nhận diện được từ API chấm công ACMS (field `paid_leave` /
+ * `unpaid_leave`, hoặc bản ghi hoàn toàn trống coi như nghỉ lễ cả công ty).
+ * null = ngày làm việc bình thường.
+ */
+export type LeaveType = "holiday" | "paid_leave" | "unpaid_leave" | null;
 
 export type DailyRow = {
   date: string;
@@ -101,6 +108,8 @@ export type DailyRow = {
   attendanceHours: number | null;
   /** Đối chiếu Backlog Actual / Time dự án / Chấm công có khớp nhau không. */
   sourceMatch: SourceMatchStatus;
+  /** Nghỉ lễ / nghỉ phép / nghỉ không lương theo dữ liệu chấm công ACMS. */
+  leaveType: LeaveType;
 };
 
 export type IssuesResponse = {
@@ -109,8 +118,13 @@ export type IssuesResponse = {
   fetched: number;
 };
 
-/** Dữ liệu ACMS gom theo ngày (key: yyyy-MM-dd), giá trị: số giờ. */
+export type AttendanceDay = {
+  hours: number;
+  leaveType: LeaveType;
+};
+
+/** Dữ liệu ACMS gom theo ngày (key: yyyy-MM-dd). */
 export type AcmsDailyData = {
-  attendance: Record<string, number>;
+  attendance: Record<string, AttendanceDay>;
   projectTool: Record<string, number>;
 };

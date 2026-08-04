@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { AttendanceDay, LeaveType } from "./types";
+
 const BASE_URL = "https://me-presentation.amela.vn/api";
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -69,28 +71,53 @@ async function acmsFetch<T>(path: string, creds: AcmsCredentials): Promise<T> {
 type TimesheetEntry = {
   work_time: number | null;
   createdAt: string | null;
+  checkin: string | null;
+  checkout: string | null;
+  paid_leave: string | null;
+  unpaid_leave: string | null;
 };
 
 type TimesheetResponse = {
   data?: { time_sheet?: TimesheetEntry[] };
 };
 
-/** monthYear dạng "MM/YYYY". Trả về giờ chấm công gộp theo ngày (yyyy-MM-dd). */
+function hasValue(value: string | null): boolean {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+/**
+ * Không có field "nghỉ lễ" riêng trong API — nhận diện qua suy luận:
+ * - `paid_leave` / `unpaid_leave` có giá trị → nghỉ phép / nghỉ không lương cá nhân.
+ * - Không checkin, không checkout, cũng không có leave request nào → bản ghi
+ *   hoàn toàn trống, dấu hiệu gần nhất cho ngày cả công ty nghỉ (nghỉ lễ).
+ */
+function detectLeaveType(entry: TimesheetEntry): LeaveType {
+  if (hasValue(entry.paid_leave)) return "paid_leave";
+  if (hasValue(entry.unpaid_leave)) return "unpaid_leave";
+  if (!entry.checkin && !entry.checkout) return "holiday";
+  return null;
+}
+
+/** monthYear dạng "MM/YYYY". Trả về giờ chấm công + loại nghỉ gộp theo ngày. */
 export async function fetchTimesheetMonth(
   creds: AcmsCredentials,
   monthYear: string,
-): Promise<Map<string, number>> {
+): Promise<Map<string, AttendanceDay>> {
   const json = await acmsFetch<TimesheetResponse>(
     `/time-sheet/user/${creds.userId}?userId=${creds.userId}` +
       `&category_id[]=1&category_id[]=2&date=${encodeURIComponent(monthYear)}`,
     creds,
   );
 
-  const byDate = new Map<string, number>();
+  const byDate = new Map<string, AttendanceDay>();
   for (const entry of json.data?.time_sheet ?? []) {
     const date = (entry.createdAt ?? "").slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
-    byDate.set(date, (byDate.get(date) ?? 0) + (entry.work_time ?? 0));
+
+    const existing = byDate.get(date);
+    const hours = (existing?.hours ?? 0) + (entry.work_time ?? 0);
+    const leaveType = existing?.leaveType ?? detectLeaveType(entry);
+    byDate.set(date, { hours, leaveType });
   }
   return byDate;
 }

@@ -12,7 +12,10 @@ type Props = {
 export function SummaryCards({ rows, dailyRows, targetHours }: Props) {
   const totalActual = sum(rows.map((row) => row.actualHours));
   const invalidTickets = rows.filter((row) => row.violations.length).length;
-  const workingDays = dailyRows.filter((day) => !day.isWeekend);
+  // Ngày nghỉ lễ/nghỉ phép không tính là ngày làm việc cần log giờ.
+  const workingDays = dailyRows.filter(
+    (day) => !day.isWeekend && day.status !== "leave",
+  );
   const okDays = dailyRows.filter((day) => day.status === "ok").length;
   const offDays = dailyRows.filter(
     (day) => day.status === "under" || day.status === "over",

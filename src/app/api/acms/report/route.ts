@@ -54,7 +54,9 @@ export async function GET(request: Request) {
         fetchTimesheetMonth(creds, `${monthNumber}/${year}`),
         fetchDailyReportsMonth(creds, month),
       ]);
-      for (const [date, hours] of timesheet) result.attendance[date] = hours;
+      for (const [date, attendanceDay] of timesheet) {
+        result.attendance[date] = attendanceDay;
+      }
       for (const [date, hours] of reports) result.projectTool[date] = hours;
     }
 

@@ -15,9 +15,9 @@ với mốc 8h/ngày, và nếu có cấu hình ACMS token thì đối chiếu t
 (tool báo cáo công việc ACMS) và **Chấm công** (hệ thống chấm công ACMS). Bấm vào một
 ngày để xem danh sách ticket của ngày đó.
 
-**Tab Đối chiếu chấm công** — bảng gọn riêng chỉ để soi 3 con số theo từng ngày
-(Actual Hours Backlog / Time dự án / Chấm công) và kết quả Khớp/Lệch, không lẫn
-danh sách ticket hay rule 8h/ngày. Có nút **Chỉ hiện ngày lệch** để lọc nhanh những
+**Tab Đối chiếu chấm công** — bảng gọn riêng chỉ để soi 2 con số theo từng ngày
+(Time dự án / Chấm công) và kết quả Khớp/Lệch, không lẫn danh sách ticket, Actual
+Hours Backlog hay rule 8h/ngày. Có nút **Chỉ hiện ngày lệch** để lọc nhanh những
 ngày cần sửa.
 
 Tool lấy **tất cả loại ticket**, chỉ loại trừ **GTask** (ticket gộp/umbrella dùng để
@@ -33,6 +33,11 @@ tổng hợp nhiều ticket con — hours của nó là cộng dồn nên tính 
 4. Theo ngày: **Actual Hours (Backlog) = Time dự án (ACMS) = Chấm công (ACMS)** —
    chỉ áp dụng khi đã cấu hình ACMS token, xem [ACMS token](#acms-token-chấm-công--time-dự-án)
 
+Ngày **nghỉ lễ** hoặc **nghỉ phép** (nghỉ nguyên lương) được bỏ qua toàn bộ rule 3 và 4
+— không bắt đủ 8h, không đối chiếu 3 nguồn — chỉ note lại là "Nghỉ lễ" hoặc "Nghỉ phép"
+thay vì báo lệch. Nghỉ không lương vẫn bị check bình thường. Xem thêm ở
+[Nhận diện ngày nghỉ](#nhận-diện-ngày-nghỉ-từ-acms).
+
 Ô nào lệch sẽ được tô nền đỏ và ghi rõ lý do ở cột `Rule` (ticket) hoặc cột
 `Đối chiếu 3 nguồn` (ngày).
 
@@ -44,6 +49,7 @@ tổng hợp nhiều ticket con — hours của nó là cộng dồn nên tính 
 | 🟥 Đỏ | Thiếu giờ, ngày làm việc chưa log giờ nào, hoặc 3 nguồn lệch nhau |
 | 🟨 Vàng | Dư giờ (> 8h) |
 | ⬜ Xám | Thứ 7 / Chủ nhật |
+| 🟦 Xanh dương | Nghỉ lễ / nghỉ phép (không check) |
 
 ## Chạy lần đầu
 
@@ -137,6 +143,23 @@ mạng) để hiện `user_id`, phòng ban và thời điểm hết hạn — b�
 
 Cũng có thể đặt `ACMS_TOKEN` trong `.env.local` theo kiểu tự host một token
 chung, tương tự `BACKLOG_API_KEY`.
+
+### Nhận diện ngày nghỉ từ ACMS
+
+API chấm công (`time-sheet`) không có field "nghỉ lễ" riêng, nên tool suy luận
+từ các field sẵn có trên từng bản ghi trong ngày:
+
+| Field | Kết luận |
+| --- | --- |
+| `paid_leave` có giá trị | **Nghỉ phép** |
+| `unpaid_leave` có giá trị | Nghỉ không lương — **vẫn check bình thường** |
+| Không `checkin`, không `checkout`, cũng không có `paid_leave`/`unpaid_leave` | **Nghỉ lễ** (suy đoán: cả công ty nghỉ nên không ai chấm công) |
+
+Ngày rơi vào 2 trường hợp đầu (`Nghỉ phép`/`Nghỉ lễ`) sẽ được note lại đúng loại
+thay vì báo "Thiếu giờ" hay "Lệch". Vì đây là suy luận qua field sẵn có (ACMS
+không expose field xác nhận trực tiếp), nếu gặp ngày bị gắn nhãn sai, báo lại
+để tinh chỉnh logic tại `detectLeaveType()` trong
+[src/lib/acms.ts](src/lib/acms.ts).
 
 ## Cấu trúc mã nguồn
 

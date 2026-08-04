@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react";
 
-import { sourceMatchStyle } from "./DailyTable";
+import { leaveLabel, sourceMatchStyle } from "./DailyTable";
 import { weekdayLabel } from "@/lib/date";
-import { formatHours, round2, sameHours } from "@/lib/report";
+import { formatHours, isPaidDayOff, round2, sameHours } from "@/lib/report";
 import type { DailyRow, SourceMatchStatus } from "@/lib/types";
 
 type Props = {
@@ -13,6 +13,7 @@ type Props = {
 
 /** Tab này chỉ so Time dự án với Chấm công, không tính Actual Hours Backlog vào. */
 function attendanceMatch(day: DailyRow): SourceMatchStatus {
+  if (isPaidDayOff(day.leaveType)) return "leave";
   if (day.projectToolHours === null || day.attendanceHours === null) {
     return "unavailable";
   }
@@ -118,13 +119,15 @@ export function AttendanceCompareTable({ days }: Props) {
                       {formatHours(day.attendanceHours)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-600">
-                      {formatHours(spread(day))}
+                      {match === "leave" ? "—" : formatHours(spread(day))}
                     </td>
                     <td className="px-3 py-2">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${sourceMatchStyle[match].badge}`}
                       >
-                        {sourceMatchStyle[match].text}
+                        {match === "leave"
+                          ? leaveLabel(day.leaveType)
+                          : sourceMatchStyle[match].text}
                       </span>
                     </td>
                   </tr>

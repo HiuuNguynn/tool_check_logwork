@@ -6,9 +6,15 @@ import type {
   DayStatus,
   FieldMapping,
   IssueRow,
+  LeaveType,
   RuleViolation,
   SourceMatchStatus,
 } from "./types";
+
+/** Nghỉ nguyên lương (nghỉ lễ / nghỉ phép) thì bỏ qua mọi rule đối chiếu giờ trong ngày. */
+export function isPaidDayOff(leaveType: LeaveType): boolean {
+  return leaveType === "holiday" || leaveType === "paid_leave";
+}
 
 /** "Re-estimate hours" / "re_estimate hours" / "Re Estimate Hours" -> "reestimatehours" */
 function normalizeFieldName(name: string): string {
@@ -165,12 +171,14 @@ export function buildDailyRows(
       const dayRows = grouped.get(date) ?? [];
       const totalActual = sum(dayRows.map((row) => row.actualHours));
       const totalEstimate = sum(dayRows.map((row) => row.estimatedHours));
+      const attendanceDay = options.acmsData?.attendance[date];
       const attendanceHours = options.acmsData
-        ? round2(options.acmsData.attendance[date] ?? 0)
+        ? round2(attendanceDay?.hours ?? 0)
         : null;
       const projectToolHours = options.acmsData
         ? round2(options.acmsData.projectTool[date] ?? 0)
         : null;
+      const leaveType = attendanceDay?.leaveType ?? null;
 
       return {
         date,
@@ -185,6 +193,7 @@ export function buildDailyRows(
           options.targetHours,
           dayRows.length,
           isWeekend(date),
+          leaveType,
         ),
         attendanceHours,
         projectToolHours,
@@ -192,7 +201,9 @@ export function buildDailyRows(
           totalActual,
           attendanceHours,
           projectToolHours,
+          leaveType,
         ),
+        leaveType,
       };
     });
 }
@@ -201,7 +212,9 @@ function sourceMatchStatus(
   backlogHours: number,
   attendanceHours: number | null,
   projectToolHours: number | null,
+  leaveType: LeaveType,
 ): SourceMatchStatus {
+  if (isPaidDayOff(leaveType)) return "leave";
   if (attendanceHours === null || projectToolHours === null) return "unavailable";
   const match =
     sameHours(backlogHours, attendanceHours) &&
@@ -214,7 +227,9 @@ function dayStatus(
   targetHours: number,
   ticketCount: number,
   weekend: boolean,
+  leaveType: LeaveType,
 ): DayStatus {
+  if (isPaidDayOff(leaveType)) return "leave";
   // Ngày làm việc chưa log giờ nào vẫn là thiếu giờ; chỉ T7/CN mới được bỏ qua.
   if (ticketCount === 0) return weekend ? "empty" : "under";
   if (sameHours(totalActual, targetHours)) return "ok";
