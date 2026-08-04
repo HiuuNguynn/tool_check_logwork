@@ -12,12 +12,14 @@ type Props = {
   targetHours: number;
 };
 
-const sourceMatchStyle: Record<SourceMatchStatus, { badge: string; text: string }> =
-  {
-    match: { badge: "bg-emerald-100 text-emerald-800", text: "Khớp" },
-    mismatch: { badge: "bg-rose-100 text-rose-800", text: "Lệch" },
-    unavailable: { badge: "bg-slate-200 text-slate-500", text: "Chưa cấu hình" },
-  };
+export const sourceMatchStyle: Record<
+  SourceMatchStatus,
+  { badge: string; text: string }
+> = {
+  match: { badge: "bg-emerald-100 text-emerald-800", text: "Khớp" },
+  mismatch: { badge: "bg-rose-100 text-rose-800", text: "Lệch" },
+  unavailable: { badge: "bg-slate-200 text-slate-500", text: "Chưa cấu hình" },
+};
 
 const statusStyle: Record<DayStatus, { row: string; badge: string; text: string }> =
   {

@@ -15,6 +15,11 @@ với mốc 8h/ngày, và nếu có cấu hình ACMS token thì đối chiếu t
 (tool báo cáo công việc ACMS) và **Chấm công** (hệ thống chấm công ACMS). Bấm vào một
 ngày để xem danh sách ticket của ngày đó.
 
+**Tab Đối chiếu chấm công** — bảng gọn riêng chỉ để soi 3 con số theo từng ngày
+(Actual Hours Backlog / Time dự án / Chấm công) và kết quả Khớp/Lệch, không lẫn
+danh sách ticket hay rule 8h/ngày. Có nút **Chỉ hiện ngày lệch** để lọc nhanh những
+ngày cần sửa.
+
 Tool lấy **tất cả loại ticket**, chỉ loại trừ **GTask** (ticket gộp/umbrella dùng để
 tổng hợp nhiều ticket con — hours của nó là cộng dồn nên tính riêng sẽ bị trùng lặp).
 
@@ -146,6 +151,7 @@ src/
     FilterBar.tsx      Bộ lọc
     DailyTable.tsx     Bảng theo ngày (bung ra xem ticket)
     TicketTable.tsx    Bảng theo ticket
+    AttendanceCompareTable.tsx  Tab đối chiếu chấm công (gọn, không kèm ticket)
     SummaryCards.tsx   Thẻ tổng quan
     SettingsDialog.tsx Cấu hình kết nối
     MultiSelect.tsx

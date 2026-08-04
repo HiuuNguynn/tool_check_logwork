@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { AttendanceCompareTable } from "./AttendanceCompareTable";
 import { DailyTable } from "./DailyTable";
 import {
   defaultFilters,
@@ -30,7 +31,7 @@ import {
 import type { AcmsDailyData, BacklogIssue, IssuesResponse } from "@/lib/types";
 
 type Me = { id: number; name: string; domain: string };
-type Tab = "daily" | "ticket";
+type Tab = "daily" | "ticket" | "attendance";
 
 async function getJson<T>(url: string, settings: Settings): Promise<T> {
   const response = await fetch(url, { headers: authHeaders(settings) });
@@ -393,28 +394,34 @@ export function ReportApp() {
               >
                 Theo ticket ({rows.length})
               </TabButton>
+              <TabButton
+                active={tab === "attendance"}
+                onClick={() => setTab("attendance")}
+              >
+                Đối chiếu chấm công
+              </TabButton>
             </div>
 
             <button
               type="button"
-              onClick={tab === "daily" ? exportDaily : exportTickets}
+              onClick={tab === "ticket" ? exportTickets : exportDaily}
               className="h-9 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Xuất CSV
             </button>
           </div>
 
-          <Legend targetHours={settings.targetHours} />
+          {tab !== "attendance" && <Legend targetHours={settings.targetHours} />}
 
-          {tab === "daily" ? (
+          {tab === "daily" && (
             <DailyTable
               days={dailyRows}
               domain={domain}
               targetHours={settings.targetHours}
             />
-          ) : (
-            <TicketTable rows={rows} domain={domain} />
           )}
+          {tab === "ticket" && <TicketTable rows={rows} domain={domain} />}
+          {tab === "attendance" && <AttendanceCompareTable days={dailyRows} />}
         </>
       )}
 

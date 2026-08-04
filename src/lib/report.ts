@@ -33,7 +33,7 @@ function toNumber(value: unknown): number | null {
 }
 
 /** So sánh giờ với dung sai nhỏ để tránh sai số dấu phẩy động (7.5 vs 7.50). */
-function sameHours(a: number, b: number): boolean {
+export function sameHours(a: number, b: number): boolean {
   return Math.abs(a - b) < 0.001;
 }
 
