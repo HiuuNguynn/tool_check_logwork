@@ -21,8 +21,19 @@ export function SummaryCards({ rows, dailyRows, targetHours }: Props) {
     (day) => day.rows.length === 0,
   ).length;
 
+  const acmsConfigured = dailyRows.some((day) => day.projectToolHours !== null);
+  const totalProjectTool = acmsConfigured
+    ? sum(dailyRows.map((day) => day.projectToolHours))
+    : null;
+  const totalAttendance = acmsConfigured
+    ? sum(dailyRows.map((day) => day.attendanceHours))
+    : null;
+  const mismatchDays = dailyRows.filter(
+    (day) => day.sourceMatch === "mismatch",
+  ).length;
+
   return (
-    <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+    <section className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
       <Card label="Tổng ticket" value={String(rows.length)} />
       <Card
         label="Tổng Actual hours"
@@ -48,6 +59,24 @@ export function SummaryCards({ rows, dailyRows, targetHours }: Props) {
         label="Ticket sai rule"
         value={String(invalidTickets)}
         tone={invalidTickets > 0 ? "bad" : "ok"}
+      />
+      <Card
+        label="Tổng Time dự án (ACMS)"
+        value={totalProjectTool === null ? "—" : formatHours(totalProjectTool)}
+        hint={acmsConfigured ? undefined : "Chưa cấu hình ACMS token"}
+        tone="neutral"
+      />
+      <Card
+        label="Tổng Chấm công (ACMS)"
+        value={totalAttendance === null ? "—" : formatHours(totalAttendance)}
+        hint={
+          acmsConfigured
+            ? mismatchDays
+              ? `${mismatchDays} ngày lệch 3 nguồn`
+              : undefined
+            : "Chưa cấu hình ACMS token"
+        }
+        tone={acmsConfigured && mismatchDays > 0 ? "warn" : "neutral"}
       />
     </section>
   );
