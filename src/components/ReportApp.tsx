@@ -299,6 +299,7 @@ export function ReportApp() {
         "Kết quả",
         "Đối chiếu 3 nguồn",
         "Nghỉ",
+        "Remote",
         "Danh sách key",
       ],
       dailyRows.map((day) => [
@@ -312,6 +313,7 @@ export function ReportApp() {
         day.status,
         day.sourceMatch,
         leaveLabel(day.leaveType),
+        day.isRemote ? "Remote" : "",
         day.rows.map((row) => row.issueKey).join(" "),
       ]),
     );
@@ -470,7 +472,8 @@ function Legend({ targetHours }: { targetHours: number }) {
       <LegendDot className="bg-rose-200" label={`Thiếu giờ / sai rule / lệch 3 nguồn`} />
       <LegendDot className="bg-amber-200" label="Dư giờ" />
       <LegendDot className="bg-slate-200" label="Chưa log giờ" />
-      <LegendDot className="bg-sky-200" label="Nghỉ lễ / nghỉ phép" />
+      <LegendDot className="bg-sky-200" label="Nghỉ phép (không check)" />
+      <LegendDot className="bg-indigo-200" label="Remote (vẫn check bình thường)" />
     </div>
   );
 }

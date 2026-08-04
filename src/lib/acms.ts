@@ -71,10 +71,9 @@ async function acmsFetch<T>(path: string, creds: AcmsCredentials): Promise<T> {
 type TimesheetEntry = {
   work_time: number | null;
   createdAt: string | null;
-  checkin: string | null;
-  checkout: string | null;
   paid_leave: string | null;
   unpaid_leave: string | null;
+  remote: number | boolean | null;
 };
 
 type TimesheetResponse = {
@@ -86,19 +85,19 @@ function hasValue(value: string | null): boolean {
 }
 
 /**
- * Không có field "nghỉ lễ" riêng trong API — nhận diện qua suy luận:
- * - `paid_leave` / `unpaid_leave` có giá trị → nghỉ phép / nghỉ không lương cá nhân.
- * - Không checkin, không checkout, cũng không có leave request nào → bản ghi
- *   hoàn toàn trống, dấu hiệu gần nhất cho ngày cả công ty nghỉ (nghỉ lễ).
+ * `paid_leave` / `unpaid_leave` có giá trị → nghỉ phép / nghỉ không lương cá nhân.
+ * KHÔNG suy đoán "nghỉ lễ" từ checkin/checkout trống — ngày làm remote cũng có
+ * thể không có checkin/checkout (không chấm công qua máy văn phòng) nên sẽ bị
+ * nhầm thành nghỉ lễ nếu chỉ dựa vào bản ghi trống. Nhận diện remote riêng qua
+ * field `remote` để không bị gộp nhầm vào loại nghỉ.
  */
 function detectLeaveType(entry: TimesheetEntry): LeaveType {
   if (hasValue(entry.paid_leave)) return "paid_leave";
   if (hasValue(entry.unpaid_leave)) return "unpaid_leave";
-  if (!entry.checkin && !entry.checkout) return "holiday";
   return null;
 }
 
-/** monthYear dạng "MM/YYYY". Trả về giờ chấm công + loại nghỉ gộp theo ngày. */
+/** monthYear dạng "MM/YYYY". Trả về giờ chấm công + loại nghỉ + remote gộp theo ngày. */
 export async function fetchTimesheetMonth(
   creds: AcmsCredentials,
   monthYear: string,
@@ -117,7 +116,8 @@ export async function fetchTimesheetMonth(
     const existing = byDate.get(date);
     const hours = (existing?.hours ?? 0) + (entry.work_time ?? 0);
     const leaveType = existing?.leaveType ?? detectLeaveType(entry);
-    byDate.set(date, { hours, leaveType });
+    const isRemote = existing?.isRemote || Boolean(entry.remote);
+    byDate.set(date, { hours, leaveType, isRemote });
   }
   return byDate;
 }

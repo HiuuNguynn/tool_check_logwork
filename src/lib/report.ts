@@ -11,9 +11,9 @@ import type {
   SourceMatchStatus,
 } from "./types";
 
-/** Nghỉ nguyên lương (nghỉ lễ / nghỉ phép) thì bỏ qua mọi rule đối chiếu giờ trong ngày. */
+/** Nghỉ nguyên lương (nghỉ phép) thì bỏ qua mọi rule đối chiếu giờ trong ngày. */
 export function isPaidDayOff(leaveType: LeaveType): boolean {
-  return leaveType === "holiday" || leaveType === "paid_leave";
+  return leaveType === "paid_leave";
 }
 
 /** "Re-estimate hours" / "re_estimate hours" / "Re Estimate Hours" -> "reestimatehours" */
@@ -179,6 +179,7 @@ export function buildDailyRows(
         ? round2(options.acmsData.projectTool[date] ?? 0)
         : null;
       const leaveType = attendanceDay?.leaveType ?? null;
+      const isRemote = attendanceDay?.isRemote ?? false;
 
       return {
         date,
@@ -204,6 +205,7 @@ export function buildDailyRows(
           leaveType,
         ),
         leaveType,
+        isRemote,
       };
     });
 }

@@ -33,10 +33,11 @@ tổng hợp nhiều ticket con — hours của nó là cộng dồn nên tính 
 4. Theo ngày: **Actual Hours (Backlog) = Time dự án (ACMS) = Chấm công (ACMS)** —
    chỉ áp dụng khi đã cấu hình ACMS token, xem [ACMS token](#acms-token-chấm-công--time-dự-án)
 
-Ngày **nghỉ lễ** hoặc **nghỉ phép** (nghỉ nguyên lương) được bỏ qua toàn bộ rule 3 và 4
-— không bắt đủ 8h, không đối chiếu 3 nguồn — chỉ note lại là "Nghỉ lễ" hoặc "Nghỉ phép"
-thay vì báo lệch. Nghỉ không lương vẫn bị check bình thường. Xem thêm ở
-[Nhận diện ngày nghỉ](#nhận-diện-ngày-nghỉ-từ-acms).
+Ngày **nghỉ phép** (nghỉ nguyên lương) được bỏ qua toàn bộ rule 3 và 4 — không bắt
+đủ 8h, không đối chiếu 3 nguồn — chỉ note lại là "Nghỉ phép" thay vì báo lệch.
+Nghỉ không lương và **ngày làm remote vẫn bị check bình thường** (chỉ note thêm
+huy hiệu "Remote" để biết, không skip rule) — remote vẫn là ngày làm việc thật.
+Xem thêm ở [Nhận diện ngày nghỉ / remote](#nhận-diện-ngày-nghỉ--remote-từ-acms).
 
 Ô nào lệch sẽ được tô nền đỏ và ghi rõ lý do ở cột `Rule` (ticket) hoặc cột
 `Đối chiếu 3 nguồn` (ngày).
@@ -49,7 +50,10 @@ thay vì báo lệch. Nghỉ không lương vẫn bị check bình thường. Xe
 | 🟥 Đỏ | Thiếu giờ, ngày làm việc chưa log giờ nào, hoặc 3 nguồn lệch nhau |
 | 🟨 Vàng | Dư giờ (> 8h) |
 | ⬜ Xám | Thứ 7 / Chủ nhật |
-| 🟦 Xanh dương | Nghỉ lễ / nghỉ phép (không check) |
+| 🟦 Xanh dương | Nghỉ phép (không check) |
+
+Huy hiệu **Remote** (tím) hiện cạnh ngày khi làm việc từ xa — chỉ để biết, không
+đổi màu dòng hay skip rule.
 
 ## Chạy lần đầu
 
@@ -144,22 +148,26 @@ mạng) để hiện `user_id`, phòng ban và thời điểm hết hạn — b�
 Cũng có thể đặt `ACMS_TOKEN` trong `.env.local` theo kiểu tự host một token
 chung, tương tự `BACKLOG_API_KEY`.
 
-### Nhận diện ngày nghỉ từ ACMS
+### Nhận diện ngày nghỉ / remote từ ACMS
 
-API chấm công (`time-sheet`) không có field "nghỉ lễ" riêng, nên tool suy luận
-từ các field sẵn có trên từng bản ghi trong ngày:
+Tool đọc trực tiếp các field có sẵn trên từng bản ghi `time-sheet`, **không suy
+đoán từ việc thiếu checkin/checkout** — vì ngày làm remote cũng thường không có
+checkin/checkout (không chấm công qua máy văn phòng), nên nếu chỉ dựa vào bản
+ghi trống sẽ nhầm remote thành nghỉ lễ.
 
-| Field | Kết luận |
-| --- | --- |
-| `paid_leave` có giá trị | **Nghỉ phép** |
-| `unpaid_leave` có giá trị | Nghỉ không lương — **vẫn check bình thường** |
-| Không `checkin`, không `checkout`, cũng không có `paid_leave`/`unpaid_leave` | **Nghỉ lễ** (suy đoán: cả công ty nghỉ nên không ai chấm công) |
+| Field | Kết luận | Có skip rule không? |
+| --- | --- | --- |
+| `paid_leave` có giá trị | **Nghỉ phép** | Có — bỏ qua rule 8h và đối chiếu 3 nguồn |
+| `unpaid_leave` có giá trị | **Nghỉ không lương** | Không — vẫn check bình thường |
+| `remote` khác 0 | **Remote** | Không — remote vẫn là ngày làm việc thật, chỉ hiện huy hiệu để biết |
 
-Ngày rơi vào 2 trường hợp đầu (`Nghỉ phép`/`Nghỉ lễ`) sẽ được note lại đúng loại
-thay vì báo "Thiếu giờ" hay "Lệch". Vì đây là suy luận qua field sẵn có (ACMS
-không expose field xác nhận trực tiếp), nếu gặp ngày bị gắn nhãn sai, báo lại
-để tinh chỉnh logic tại `detectLeaveType()` trong
-[src/lib/acms.ts](src/lib/acms.ts).
+Tool hiện **chưa** phân biệt được "nghỉ lễ" (ngày lễ chính thức của công ty) một
+cách đáng tin cậy — ACMS có một API riêng cho lịch nghỉ lễ
+(`/api/holiday/schedule-leader`) mà tool này chưa gọi tới. Nếu cần, có thể tích
+hợp thêm nhưng cần khảo sát đúng request/response của endpoint đó trước.
+
+Logic nhận diện nằm ở `detectLeaveType()` trong
+[src/lib/acms.ts](src/lib/acms.ts) — báo lại nếu gặp ngày bị gắn nhãn sai.
 
 ## Cấu trúc mã nguồn
 

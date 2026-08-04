@@ -106,6 +106,14 @@ export function AttendanceCompareTable({ days }: Props) {
                   <tr key={day.date} className={bad ? "bg-rose-50/40" : undefined}>
                     <td className="px-3 py-2 font-medium tabular-nums">
                       {day.date}
+                      {day.isRemote && (
+                        <span
+                          className="ml-1.5 inline-flex rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700"
+                          title="Làm remote — vẫn tính vào rule như ngày làm việc bình thường"
+                        >
+                          Remote
+                        </span>
+                      )}
                     </td>
                     <td
                       className={`px-3 py-2 ${day.isWeekend ? "text-slate-400" : "text-slate-600"}`}

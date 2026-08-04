@@ -6,9 +6,7 @@ import { weekdayLabel } from "@/lib/date";
 import { formatHours } from "@/lib/report";
 import type { DailyRow, DayStatus, LeaveType, SourceMatchStatus } from "@/lib/types";
 
-/** Không có field "nghỉ lễ" riêng trong ACMS nên nhãn cụ thể phải suy từ leaveType. */
 export function leaveLabel(leaveType: LeaveType): string {
-  if (leaveType === "holiday") return "Nghỉ lễ";
   if (leaveType === "paid_leave") return "Nghỉ phép";
   if (leaveType === "unpaid_leave") return "Nghỉ không lương";
   return "";
@@ -120,6 +118,14 @@ export function DailyTable({ days, domain, targetHours }: Props) {
                   </td>
                   <td className="px-3 py-2 font-medium tabular-nums">
                     {day.date}
+                    {day.isRemote && (
+                      <span
+                        className="ml-1.5 inline-flex rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700"
+                        title="Làm remote — vẫn tính vào rule như ngày làm việc bình thường"
+                      >
+                        Remote
+                      </span>
+                    )}
                   </td>
                   <td
                     className={`px-3 py-2 ${day.isWeekend ? "text-slate-400" : "text-slate-600"}`}
