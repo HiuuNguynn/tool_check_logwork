@@ -11,9 +11,9 @@ import type {
   SourceMatchStatus,
 } from "./types";
 
-/** Nghỉ nguyên lương (nghỉ phép) thì bỏ qua mọi rule đối chiếu giờ trong ngày. */
+/** Nghỉ nguyên lương (nghỉ lễ / nghỉ phép) thì bỏ qua mọi rule đối chiếu giờ trong ngày. */
 export function isPaidDayOff(leaveType: LeaveType): boolean {
-  return leaveType === "paid_leave";
+  return leaveType === "paid_leave" || leaveType === "holiday";
 }
 
 /** "Re-estimate hours" / "re_estimate hours" / "Re Estimate Hours" -> "reestimatehours" */

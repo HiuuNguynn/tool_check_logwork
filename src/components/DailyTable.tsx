@@ -7,6 +7,7 @@ import { formatHours } from "@/lib/report";
 import type { DailyRow, DayStatus, LeaveType, SourceMatchStatus } from "@/lib/types";
 
 export function leaveLabel(leaveType: LeaveType): string {
+  if (leaveType === "holiday") return "Nghỉ lễ";
   if (leaveType === "paid_leave") return "Nghỉ phép";
   if (leaveType === "unpaid_leave") return "Nghỉ không lương";
   return "";

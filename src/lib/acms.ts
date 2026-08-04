@@ -71,9 +71,12 @@ async function acmsFetch<T>(path: string, creds: AcmsCredentials): Promise<T> {
 type TimesheetEntry = {
   work_time: number | null;
   createdAt: string | null;
+  checkin: string | null;
+  checkout: string | null;
   paid_leave: string | null;
   unpaid_leave: string | null;
   remote: number | boolean | null;
+  request_type: number | null;
 };
 
 type TimesheetResponse = {
@@ -86,14 +89,19 @@ function hasValue(value: string | null): boolean {
 
 /**
  * `paid_leave` / `unpaid_leave` có giá trị → nghỉ phép / nghỉ không lương cá nhân.
- * KHÔNG suy đoán "nghỉ lễ" từ checkin/checkout trống — ngày làm remote cũng có
- * thể không có checkin/checkout (không chấm công qua máy văn phòng) nên sẽ bị
- * nhầm thành nghỉ lễ nếu chỉ dựa vào bản ghi trống. Nhận diện remote riêng qua
- * field `remote` để không bị gộp nhầm vào loại nghỉ.
+ *
+ * `request_type === 3` nghĩa là "cả ngày được duyệt nghỉ" (theo dữ liệu thật đã
+ * đối chiếu: ngày nghỉ phép và ngày nghỉ lễ đều có request_type=3 + checkin/
+ * checkout null; khác nhau duy nhất ở việc có `paid_leave` đi kèm hay không).
+ * Nên nếu request_type=3 mà KHÔNG có paid_leave/unpaid_leave và không phải
+ * remote (field `remote`) thì suy ra là nghỉ lễ — không ai xin nghỉ cá nhân cả.
  */
 function detectLeaveType(entry: TimesheetEntry): LeaveType {
   if (hasValue(entry.paid_leave)) return "paid_leave";
   if (hasValue(entry.unpaid_leave)) return "unpaid_leave";
+  if (entry.request_type === 3 && !entry.checkin && !entry.checkout && !entry.remote) {
+    return "holiday";
+  }
   return null;
 }
 

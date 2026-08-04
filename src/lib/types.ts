@@ -87,12 +87,17 @@ export type DayStatus = "ok" | "under" | "over" | "empty" | "leave";
 export type SourceMatchStatus = "match" | "mismatch" | "unavailable" | "leave";
 
 /**
- * Loại nghỉ nhận diện được từ field `paid_leave` / `unpaid_leave` trên time-sheet
- * ACMS. Không còn suy đoán "nghỉ lễ" từ bản ghi trống — ngày remote cũng có thể
- * không có checkin/checkout nên heuristic đó bắt nhầm remote thành nghỉ lễ.
+ * Loại nghỉ nhận diện được từ time-sheet ACMS:
+ * - `paid_leave` có giá trị → nghỉ phép cá nhân (kèm request_type = 3).
+ * - `unpaid_leave` có giá trị → nghỉ không lương.
+ * - `request_type === 3` (cả ngày được duyệt nghỉ) nhưng KHÔNG có paid_leave/
+ *   unpaid_leave và không phải remote → nghỉ lễ (không ai xin nghỉ cá nhân,
+ *   suy ra cả công ty nghỉ). So sánh thực tế: ngày nghỉ phép 07-03 và ngày nghỉ
+ *   lễ 07-20 đều có request_type=3 + checkin/checkout null, chỉ khác nhau ở
+ *   việc có paid_leave hay không.
  * null = ngày làm việc bình thường (kể cả remote).
  */
-export type LeaveType = "paid_leave" | "unpaid_leave" | null;
+export type LeaveType = "paid_leave" | "unpaid_leave" | "holiday" | null;
 
 export type DailyRow = {
   date: string;
@@ -109,7 +114,7 @@ export type DailyRow = {
   attendanceHours: number | null;
   /** Đối chiếu Backlog Actual / Time dự án / Chấm công có khớp nhau không. */
   sourceMatch: SourceMatchStatus;
-  /** Nghỉ phép / nghỉ không lương theo dữ liệu chấm công ACMS. */
+  /** Nghỉ lễ / nghỉ phép / nghỉ không lương theo dữ liệu chấm công ACMS. */
   leaveType: LeaveType;
   /** Làm remote theo field `remote` trên time-sheet — vẫn phải check bình thường. */
   isRemote: boolean;
