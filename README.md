@@ -13,7 +13,9 @@ Công cụ thống kê ticket Backlog để kiểm tra logwork trước khi ch�
 **Bảng theo ngày** — gom ticket theo ngày làm việc, cộng tổng Actual hours, đối chiếu
 với mốc 8h/ngày, và nếu có cấu hình ACMS token thì đối chiếu thêm với **Time dự án**
 (tool báo cáo công việc ACMS) và **Chấm công** (hệ thống chấm công ACMS). Bấm vào một
-ngày để xem danh sách ticket của ngày đó.
+ngày để xem chi tiết, tách riêng 2 danh sách: ticket **Backlog** và từng dòng đã log
+qua **tool ACMS** (Time dự án) — không gộp chung, để dễ đối chiếu ticket nào đã log ở
+đâu.
 
 **Tab Đối chiếu chấm công** — bảng gọn riêng chỉ để soi 2 con số theo từng ngày
 (Time dự án / Chấm công) và kết quả Khớp/Lệch, không lẫn danh sách ticket, Actual

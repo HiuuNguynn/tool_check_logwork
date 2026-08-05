@@ -46,7 +46,11 @@ export async function GET(request: Request) {
       );
     }
 
-    const result: AcmsDailyData = { attendance: {}, projectTool: {} };
+    const result: AcmsDailyData = {
+      attendance: {},
+      projectTool: {},
+      projectToolEntries: {},
+    };
 
     for (const month of monthsBetween(from, to)) {
       const [year, monthNumber] = month.split("-");
@@ -57,7 +61,10 @@ export async function GET(request: Request) {
       for (const [date, attendanceDay] of timesheet) {
         result.attendance[date] = attendanceDay;
       }
-      for (const [date, hours] of reports) result.projectTool[date] = hours;
+      for (const [date, day] of reports) {
+        result.projectTool[date] = day.hours;
+        result.projectToolEntries[date] = day.entries;
+      }
     }
 
     return NextResponse.json(result);

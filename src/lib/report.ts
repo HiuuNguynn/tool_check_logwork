@@ -178,6 +178,7 @@ export function buildDailyRows(
       const projectToolHours = options.acmsData
         ? round2(options.acmsData.projectTool[date] ?? 0)
         : null;
+      const projectToolRows = options.acmsData?.projectToolEntries[date] ?? [];
       const leaveType = attendanceDay?.leaveType ?? null;
       const isRemote = attendanceDay?.isRemote ?? false;
 
@@ -198,6 +199,7 @@ export function buildDailyRows(
         ),
         attendanceHours,
         projectToolHours,
+        projectToolRows,
         sourceMatch: sourceMatchStatus(
           totalActual,
           attendanceHours,

@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { AttendanceDay, LeaveType } from "./types";
+import type { AttendanceDay, LeaveType, ProjectToolEntry } from "./types";
 
 const BASE_URL = "https://me-presentation.amela.vn/api";
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -130,27 +130,46 @@ export async function fetchTimesheetMonth(
   return byDate;
 }
 
-type DailyReportEntry = { actual_time: number | null };
+type DailyReportEntry = {
+  actual_time: number | null;
+  title: string | null;
+  link_backlog: string | null;
+  project?: { name?: string | null } | null;
+};
 type DailyReportDay = { work_date: string; reports_in_day?: DailyReportEntry[] };
 type DailyReportsResponse = { data?: DailyReportDay[] };
 
-/** monthInYear dạng "YYYY-MM". Trả về giờ log qua tool gộp theo ngày (yyyy-MM-dd). */
+const BACKLOG_ISSUE_KEY_PATTERN = /\/view\/([A-Z][A-Z0-9]*-\d+)/;
+
+function extractIssueKey(linkBacklog: string | null): string | null {
+  if (!linkBacklog) return null;
+  return linkBacklog.match(BACKLOG_ISSUE_KEY_PATTERN)?.[1] ?? null;
+}
+
+export type ProjectToolDay = { hours: number; entries: ProjectToolEntry[] };
+
+/** monthInYear dạng "YYYY-MM". Trả về giờ + từng dòng log qua tool ACMS theo ngày. */
 export async function fetchDailyReportsMonth(
   creds: AcmsCredentials,
   monthInYear: string,
-): Promise<Map<string, number>> {
+): Promise<Map<string, ProjectToolDay>> {
   const json = await acmsFetch<DailyReportsResponse>(
     `/daily-reports-calendar?month_in_year=${encodeURIComponent(monthInYear)}`,
     creds,
   );
 
-  const byDate = new Map<string, number>();
+  const byDate = new Map<string, ProjectToolDay>();
   for (const day of json.data ?? []) {
-    const hours = (day.reports_in_day ?? []).reduce(
-      (sum, report) => sum + (report.actual_time ?? 0),
-      0,
-    );
-    byDate.set(day.work_date, hours);
+    const reports = day.reports_in_day ?? [];
+    const hours = reports.reduce((sum, report) => sum + (report.actual_time ?? 0), 0);
+    const entries: ProjectToolEntry[] = reports.map((report) => ({
+      title: report.title ?? "",
+      actualTime: report.actual_time ?? 0,
+      issueKey: extractIssueKey(report.link_backlog),
+      linkBacklog: report.link_backlog ?? null,
+      projectName: report.project?.name ?? null,
+    }));
+    byDate.set(day.work_date, { hours, entries });
   }
   return byDate;
 }

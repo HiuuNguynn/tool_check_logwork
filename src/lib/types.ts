@@ -110,6 +110,8 @@ export type DailyRow = {
   status: DayStatus;
   /** Tổng giờ báo cáo qua tool ACMS (daily-reports-calendar) trong ngày. */
   projectToolHours: number | null;
+  /** Danh sách từng dòng đã log qua tool ACMS trong ngày (tách riêng khỏi Backlog). */
+  projectToolRows: ProjectToolEntry[];
   /** Tổng giờ chấm công (time-sheet) trong ngày. */
   attendanceHours: number | null;
   /** Đối chiếu Backlog Actual / Time dự án / Chấm công có khớp nhau không. */
@@ -132,8 +134,19 @@ export type AttendanceDay = {
   isRemote: boolean;
 };
 
+/** Một dòng log việc qua tool ACMS (daily-reports-calendar), tách riêng khỏi Backlog. */
+export type ProjectToolEntry = {
+  title: string;
+  actualTime: number;
+  /** Issue key Backlog suy ra từ link_backlog, nếu có liên kết. */
+  issueKey: string | null;
+  linkBacklog: string | null;
+  projectName: string | null;
+};
+
 /** Dữ liệu ACMS gom theo ngày (key: yyyy-MM-dd). */
 export type AcmsDailyData = {
   attendance: Record<string, AttendanceDay>;
   projectTool: Record<string, number>;
+  projectToolEntries: Record<string, ProjectToolEntry[]>;
 };
