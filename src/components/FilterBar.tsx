@@ -124,6 +124,12 @@ export function FilterBar({
     patch({ from: firstDayOfMonth(anchor), to: lastDayOfMonth(anchor) });
   }
 
+  function applyMonth(monthValue: string) {
+    if (!/^\d{4}-\d{2}$/.test(monthValue)) return;
+    const anchor = `${monthValue}-01`;
+    patch({ from: firstDayOfMonth(anchor), to: lastDayOfMonth(anchor) });
+  }
+
   return (
     <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -177,6 +183,15 @@ export function FilterBar({
         >
           7 ngày gần nhất
         </QuickButton>
+        <label className="flex items-center gap-1.5 text-slate-500">
+          Chọn tháng khác:
+          <input
+            type="month"
+            value={filters.from.slice(0, 7)}
+            onChange={(event) => applyMonth(event.target.value)}
+            className="h-7 rounded-full border border-slate-200 px-2 text-xs text-slate-600"
+          />
+        </label>
       </div>
 
       <div className="mt-4 flex flex-wrap items-end justify-between gap-4 border-t border-slate-100 pt-4">
