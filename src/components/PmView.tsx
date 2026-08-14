@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { MultiSelect, type Option } from "./MultiSelect";
 import { PmMatrix, type SelectedCell } from "./PmMatrix";
@@ -31,14 +32,40 @@ function currentMonthRange(): Range {
   return { from: firstDayOfMonth(today), to: lastDayOfMonth(today) };
 }
 
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseIdList(value: string | null): number[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((id) => Number.isInteger(id) && id > 0);
+}
+
+function rangeFromSearchParams(params: URLSearchParams): Range {
+  const fallback = currentMonthRange();
+  const from = params.get("from");
+  const to = params.get("to");
+  return {
+    from: from && DATE_PATTERN.test(from) ? from : fallback.from,
+    to: to && DATE_PATTERN.test(to) ? to : fallback.to,
+  };
+}
+
 export function PmView() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [ready, setReady] = useState(false);
 
   const [me, setMe] = useState<Me | null>(null);
   const [projects, setProjects] = useState<Option[]>([]);
-  const [projectIds, setProjectIds] = useState<number[]>([]);
-  const [range, setRange] = useState<Range>(currentMonthRange);
+  const [projectIds, setProjectIds] = useState<number[]>(() =>
+    parseIdList(searchParams.get("projectIds")),
+  );
+  const [range, setRange] = useState<Range>(() => rangeFromSearchParams(searchParams));
 
   const [members, setMembers] = useState<Member[]>([]);
   const [issues, setIssues] = useState<BacklogIssue[] | null>(null);
@@ -47,10 +74,23 @@ export function PmView() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
 
+  // F5 phải khôi phục lại đúng lựa chọn trước đó rồi tự chạy lại, chứ không
+  // chỉ khôi phục input mà bỏ trống bảng.
+  const autoRunOnce = useRef(parseIdList(searchParams.get("projectIds")).length > 0);
+
   useEffect(() => {
     setSettings(loadSettings());
     setReady(true);
   }, []);
+
+  // Đồng bộ project + khoảng ngày lên URL để F5 không mất lựa chọn.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("projectIds", projectIds.join(","));
+    params.set("from", range.from);
+    params.set("to", range.to);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [projectIds, range, pathname, router]);
 
   useEffect(() => {
     if (!ready) return;
@@ -86,9 +126,7 @@ export function PmView() {
     };
   }, [ready, settings]);
 
-  const projectKey = projectIds.join(",");
-
-  async function runReport() {
+  const runReport = useCallback(async () => {
     if (!projectIds.length) {
       setError("Chọn ít nhất 1 project để xem danh sách thành viên.");
       return;
@@ -97,6 +135,7 @@ export function PmView() {
     setError(null);
     setSelected(null);
     try {
+      const projectKey = projectIds.join(",");
       const params = new URLSearchParams({
         from: range.from,
         to: range.to,
@@ -117,7 +156,13 @@ export function PmView() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [projectIds, range, settings]);
+
+  useEffect(() => {
+    if (!me || !autoRunOnce.current) return;
+    autoRunOnce.current = false;
+    runReport();
+  }, [me, runReport]);
 
   const rows = useMemo<IssueRow[]>(() => {
     if (!issues) return [];
