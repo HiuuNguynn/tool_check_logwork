@@ -150,3 +150,29 @@ export type AcmsDailyData = {
   projectTool: Record<string, number>;
   projectToolEntries: Record<string, ProjectToolEntry[]>;
 };
+
+/**
+ * Trạng thái 1 ô (thành viên × ngày) trong màn PM — không có rule 8h/ngày và
+ * không đối chiếu ACMS vì token cá nhân chỉ xem được chấm công của chính chủ.
+ */
+export type MemberDayStatus = "ok" | "violation" | "missing" | "weekend";
+
+export type MemberDayCell = {
+  date: string;
+  isWeekend: boolean;
+  ticketCount: number;
+  totalActual: number;
+  violations: RuleViolation[];
+  status: MemberDayStatus;
+};
+
+export type MemberRow = {
+  userId: number;
+  userName: string;
+  cells: MemberDayCell[];
+  totalActual: number;
+  /** Số ngày làm việc (không tính T7/CN) không có ticket nào được log. */
+  missingDays: number;
+  /** Số ngày có ticket nhưng sai rule ngày/giờ. */
+  violationDays: number;
+};

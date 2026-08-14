@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -333,13 +334,21 @@ export function ReportApp() {
               : "Chưa kết nối — vào Cài đặt để nhập API key."}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setSettingsOpen(true)}
-          className="h-9 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Cài đặt
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/pm"
+            className="flex h-9 items-center rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Chế độ PM
+          </Link>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="h-9 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Cài đặt
+          </button>
+        </div>
       </header>
 
       <FilterBar

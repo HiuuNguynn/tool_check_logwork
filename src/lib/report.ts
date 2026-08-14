@@ -7,6 +7,8 @@ import type {
   FieldMapping,
   IssueRow,
   LeaveType,
+  MemberDayCell,
+  MemberRow,
   RuleViolation,
   SourceMatchStatus,
 } from "./types";
@@ -251,4 +253,76 @@ export function round2(value: number): number {
 export function formatHours(value: number | null): string {
   if (value === null) return "—";
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+/**
+ * Ma trận thành viên × ngày cho màn PM: chỉ dựa dữ liệu Backlog (rule ngày/giờ
+ * từ `checkRules()`), không có rule 8h/ngày và không đối chiếu ACMS — token cá
+ * nhân chỉ xem được chấm công của chính chủ nên không thể áp dụng cho cả team.
+ * Cuối tuần không có ticket thì coi là "weekend", không tính là thiếu log.
+ */
+export function buildMemberMatrix(
+  members: { id: number; name: string }[],
+  rows: IssueRow[],
+  range: { from: string; to: string },
+): MemberRow[] {
+  const dates = eachDay(range.from, range.to);
+  const byMember = new Map<number, Map<string, IssueRow[]>>();
+
+  for (const row of rows) {
+    const workDate = row.workDate;
+    if (row.assigneeId === null || !workDate || !inRange(workDate, range.from, range.to)) {
+      continue;
+    }
+    let byDate = byMember.get(row.assigneeId);
+    if (!byDate) {
+      byDate = new Map();
+      byMember.set(row.assigneeId, byDate);
+    }
+    const bucket = byDate.get(workDate);
+    if (bucket) bucket.push(row);
+    else byDate.set(workDate, [row]);
+  }
+
+  return members.map((member) => {
+    const byDate = byMember.get(member.id);
+    let missingDays = 0;
+    let violationDays = 0;
+
+    const cells: MemberDayCell[] = dates.map((date) => {
+      const dayRows = byDate?.get(date) ?? [];
+      const weekend = isWeekend(date);
+      const totalActual = sum(dayRows.map((row) => row.actualHours));
+      const violations = dayRows.flatMap((row) => row.violations);
+
+      let status: MemberDayCell["status"];
+      if (dayRows.length === 0) {
+        status = weekend ? "weekend" : "missing";
+        if (status === "missing") missingDays += 1;
+      } else if (violations.length > 0) {
+        status = "violation";
+        violationDays += 1;
+      } else {
+        status = "ok";
+      }
+
+      return {
+        date,
+        isWeekend: weekend,
+        ticketCount: dayRows.length,
+        totalActual,
+        violations,
+        status,
+      };
+    });
+
+    return {
+      userId: member.id,
+      userName: member.name,
+      cells,
+      totalActual: sum(cells.map((cell) => cell.totalActual)),
+      missingDays,
+      violationDays,
+    };
+  });
 }
