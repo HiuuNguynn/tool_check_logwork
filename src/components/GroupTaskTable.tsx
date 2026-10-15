@@ -198,53 +198,56 @@ export function GroupTaskTable({ rows, domain, onUpdate }: Props) {
   );
 }
 
+/** Cao vừa khoảng 10 task con, dài hơn thì cuộn — G-Task lớn có tới hàng trăm task con. */
 function ChildTaskTable({ tasks, domain }: { tasks: ChildTask[]; domain: string }) {
   return (
-    <table className="w-full text-xs">
-      <thead className="text-left text-[11px] uppercase tracking-wide text-slate-400">
-        <tr>
-          <th className="w-32 py-1 pr-3 font-medium">Task con</th>
-          <th className="py-1 pr-3 font-medium">Summary</th>
-          <th className="w-28 py-1 pr-3 font-medium">Status</th>
-          <th className="w-40 py-1 pr-3 font-medium">Người phụ trách</th>
-          <th className="w-24 py-1 pr-3 font-medium">Start Date</th>
-          <th className="w-24 py-1 pr-3 font-medium">Due Date</th>
-          <th className="w-20 py-1 pr-3 text-right font-medium">Estimate</th>
-          <th className="w-20 py-1 text-right font-medium">Actual</th>
-        </tr>
-      </thead>
-      <tbody>
-        {tasks.map((task) => (
-          <tr key={task.id} className="border-t border-slate-200/70">
-            <td className="py-1.5 pr-3">
-              <a
-                href={`https://${domain}/view/${task.issueKey}`}
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium text-blue-700 hover:underline"
-              >
-                {task.issueKey}
-              </a>
-            </td>
-            <td className="py-1.5 pr-3 text-slate-600">
-              <span className="line-clamp-1" title={task.summary}>
-                {task.summary}
-              </span>
-            </td>
-            <td className="py-1.5 pr-3 text-slate-600">{task.statusName}</td>
-            <td className="py-1.5 pr-3 text-slate-600">{task.assigneeName}</td>
-            <td className="py-1.5 pr-3 tabular-nums text-slate-600">{task.startDate ?? "—"}</td>
-            <td className="py-1.5 pr-3 tabular-nums text-slate-600">{task.dueDate ?? "—"}</td>
-            <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">
-              {formatHours(task.estimatedHours)}
-            </td>
-            <td className="py-1.5 text-right tabular-nums font-medium text-slate-800">
-              {formatHours(task.actualHours)}
-            </td>
+    <div className="max-h-80 overflow-y-auto">
+      <table className="w-full text-xs">
+        <thead className="sticky top-0 bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-400">
+          <tr>
+            <th className="w-32 py-1 pr-3 font-medium">Task con</th>
+            <th className="py-1 pr-3 font-medium">Summary</th>
+            <th className="w-28 py-1 pr-3 font-medium">Status</th>
+            <th className="w-40 py-1 pr-3 font-medium">Người phụ trách</th>
+            <th className="w-24 py-1 pr-3 font-medium">Start Date</th>
+            <th className="w-24 py-1 pr-3 font-medium">Due Date</th>
+            <th className="w-20 py-1 pr-3 text-right font-medium">Estimate</th>
+            <th className="w-20 py-1 text-right font-medium">Actual</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {tasks.map((task) => (
+            <tr key={task.id} className="border-t border-slate-200/70">
+              <td className="py-1.5 pr-3">
+                <a
+                  href={`https://${domain}/view/${task.issueKey}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-blue-700 hover:underline"
+                >
+                  {task.issueKey}
+                </a>
+              </td>
+              <td className="py-1.5 pr-3 text-slate-600">
+                <span className="line-clamp-1" title={task.summary}>
+                  {task.summary}
+                </span>
+              </td>
+              <td className="py-1.5 pr-3 text-slate-600">{task.statusName}</td>
+              <td className="py-1.5 pr-3 text-slate-600">{task.assigneeName}</td>
+              <td className="py-1.5 pr-3 tabular-nums text-slate-600">{task.startDate ?? "—"}</td>
+              <td className="py-1.5 pr-3 tabular-nums text-slate-600">{task.dueDate ?? "—"}</td>
+              <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">
+                {formatHours(task.estimatedHours)}
+              </td>
+              <td className="py-1.5 text-right tabular-nums font-medium text-slate-800">
+                {formatHours(task.actualHours)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
