@@ -3,6 +3,7 @@ import type {
   AcmsDailyData,
   BacklogIssue,
   DailyRow,
+  ChildTask,
   ChildTotal,
   DayStatus,
   FieldMapping,
@@ -341,6 +342,20 @@ export function isFinishedStatus(status: { id: number; name: string } | undefine
   return status.id === CLOSED_STATUS_ID || /^cancel/i.test(status.name.trim());
 }
 
+export function toChildTask(issue: BacklogIssue): ChildTask {
+  return {
+    id: issue.id,
+    issueKey: issue.issueKey,
+    summary: issue.summary,
+    statusName: issue.status?.name ?? "",
+    assigneeName: issue.assignee?.name ?? "(chưa gán)",
+    startDate: toDateKey(issue.startDate),
+    dueDate: toDateKey(issue.dueDate),
+    estimatedHours: toNumber(issue.estimatedHours),
+    actualHours: toNumber(issue.actualHours),
+  };
+}
+
 /**
  * Dòng G-Task cho màn PM. Actual Hours của G-Task phải bằng tổng Actual Hours
  * của các task con; G-Task chưa kết thúc mà Due Date <= hôm nay (hoặc chưa
@@ -366,7 +381,7 @@ export function toGroupTaskRow(
     dueDate,
     estimatedHours: toNumber(issue.estimatedHours),
     actualHours,
-    childCount: childTotal?.count ?? 0,
+    children: childTotal?.tasks ?? [],
     childActualHours,
     // G-Task chưa điền Actual và không có giờ con nào thì coi như đã khớp (0 = 0).
     actualMismatch: !sameHours(actualHours ?? 0, childActualHours),

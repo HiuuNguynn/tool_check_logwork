@@ -37,7 +37,8 @@ Chọn project + khoảng ngày rồi bấm **Kiểm tra**. Có 2 tab:
   khoảng ngày đã chọn (G-Task chưa điền ngày nào: còn mở thì vẫn hiện, đã Closed /
   Cancel thì bỏ). Bảng phân trang 20 / 50 / 100 dòng. Mỗi dòng có `Estimate Hours`,
   `Actual Hours` đang lưu trên G-Task và **tổng Actual Hours của các task con** (mọi
-  trạng thái, task con chưa điền tính là 0).
+  trạng thái, task con chưa điền tính là 0). Bấm mũi tên ▸ đầu dòng để bung danh
+  sách task con.
   - Actual của G-Task khác tổng task con → tô vàng, hiện nút **Update** (rê chuột
     vào để xem số giờ sẽ ghi). Bấm nút thì server tính lại tổng task con ngay lúc
     đó rồi ghi vào `Actual Hours` của G-Task (không dùng số đang hiện trên bảng, để

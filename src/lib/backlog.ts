@@ -9,7 +9,7 @@ import type {
   GroupTasksResponse,
   IssuesResponse,
 } from "./types";
-import { isFinishedStatus, round2 } from "./report";
+import { isFinishedStatus, round2, toChildTask } from "./report";
 
 export const PAGE_SIZE = 100;
 export const MAX_PAGES = 25;
@@ -236,7 +236,7 @@ export async function fetchIssues(
 const PARENT_BATCH_SIZE = 50;
 
 /**
- * Cộng Actual Hours của toàn bộ task con (mọi trạng thái) theo từng G-Task.
+ * Gom task con (mọi trạng thái) theo từng G-Task và cộng Actual Hours.
  * Backlog chỉ có 1 cấp cha-con nên không cần đệ quy.
  */
 export async function fetchChildTotals(
@@ -244,7 +244,7 @@ export async function fetchChildTotals(
   parentIds: number[],
 ): Promise<{ totals: Record<number, ChildTotal>; truncated: boolean }> {
   const totals: Record<number, ChildTotal> = {};
-  for (const id of parentIds) totals[id] = { count: 0, actualHours: 0 };
+  for (const id of parentIds) totals[id] = { tasks: [], actualHours: 0 };
   let truncated = false;
 
   for (let start = 0; start < parentIds.length; start += PARENT_BATCH_SIZE) {
@@ -255,7 +255,7 @@ export async function fetchChildTotals(
     for (const child of result.issues) {
       const total = child.parentIssueId ? totals[child.parentIssueId] : undefined;
       if (!total) continue;
-      total.count += 1;
+      total.tasks.push(toChildTask(child));
       total.actualHours = round2(total.actualHours + (child.actualHours ?? 0));
     }
   }

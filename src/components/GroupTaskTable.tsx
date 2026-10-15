@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { formatHours } from "@/lib/report";
-import type { GroupTaskRow } from "@/lib/types";
+import type { ChildTask, GroupTaskRow } from "@/lib/types";
 
 type Props = {
   rows: GroupTaskRow[];
@@ -17,6 +17,7 @@ const PAGE_SIZES = [20, 50, 100] as const;
 export function GroupTaskTable({ rows, domain, onUpdate }: Props) {
   const [updating, setUpdating] = useState<Set<number>>(new Set());
   const [errors, setErrors] = useState<Record<number, string>>({});
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0]);
   const [page, setPage] = useState(1);
 
@@ -32,6 +33,15 @@ export function GroupTaskTable({ rows, domain, onUpdate }: Props) {
         Không có G-Task nào trong project và khoảng ngày đã chọn.
       </div>
     );
+  }
+
+  function toggle(issueId: number) {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(issueId)) next.delete(issueId);
+      else next.add(issueId);
+      return next;
+    });
   }
 
   async function handleUpdate(issueId: number) {
@@ -61,6 +71,7 @@ export function GroupTaskTable({ rows, domain, onUpdate }: Props) {
         <table className="w-full min-w-5xl border-collapse text-sm">
           <thead className="sticky-head bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
+              <Th className="w-8" />
               <Th className="w-32">Key</Th>
               <Th className="min-w-56">Summary</Th>
               <Th className="w-28">Status</Th>
@@ -76,74 +87,97 @@ export function GroupTaskTable({ rows, domain, onUpdate }: Props) {
           <tbody className="divide-y divide-slate-100">
             {pageRows.map((row) => {
               const isUpdating = updating.has(row.id);
+              const isOpen = expanded.has(row.id);
               return (
-                <tr key={row.id} className={row.dueAlert ? "bg-rose-50/40" : undefined}>
-                  <Td>
-                    <a
-                      href={`https://${domain}/view/${row.issueKey}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-medium text-blue-700 hover:underline"
-                    >
-                      {row.issueKey}
-                    </a>
-                  </Td>
-                  <Td className="max-w-sm">
-                    <span className="line-clamp-2 text-slate-700" title={row.summary}>
-                      {row.summary}
-                    </span>
-                  </Td>
-                  <Td className="text-slate-600">{row.statusName}</Td>
-                  <Td className="text-slate-600">{row.assigneeName}</Td>
-                  <Td>{row.startDate ?? "—"}</Td>
-                  <Td
-                    className={row.dueAlert ? "bg-rose-200/70 font-semibold text-rose-900" : ""}
-                  >
-                    <span
-                      title={
-                        row.dueAlert
-                          ? "Due Date <= hôm nay (hoặc chưa điền) — cần vào check lại"
-                          : undefined
-                      }
-                    >
-                      {row.dueDate ?? "Chưa điền"}
-                    </span>
-                  </Td>
-                  <Td className="text-right tabular-nums">{formatHours(row.estimatedHours)}</Td>
-                  <Td
-                    className={`text-right tabular-nums ${
-                      row.actualMismatch ? "bg-amber-100/80 font-medium text-amber-900" : ""
-                    }`}
-                  >
-                    {formatHours(row.actualHours)}
-                  </Td>
-                  <Td className="text-right tabular-nums">
-                    <div className="font-medium text-slate-900">
-                      {formatHours(row.childActualHours)}
-                    </div>
-                    <div className="text-xs text-slate-400">{row.childCount} task con</div>
-                  </Td>
-                  <Td>
-                    {row.actualMismatch ? (
-                      <button
-                        type="button"
-                        onClick={() => handleUpdate(row.id)}
-                        disabled={isUpdating}
-                        title={`Ghi ${formatHours(row.childActualHours)}h vào Actual Hours của G-Task`}
-                        className="h-8 w-full whitespace-nowrap rounded-md bg-slate-900 px-3 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+                <Fragment key={row.id}>
+                  <tr className={row.dueAlert ? "bg-rose-50/40" : undefined}>
+                    <Td className="pr-0">
+                      {row.children.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => toggle(row.id)}
+                          aria-expanded={isOpen}
+                          title={isOpen ? "Ẩn task con" : "Xem task con"}
+                          className="flex size-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        >
+                          {isOpen ? "▾" : "▸"}
+                        </button>
+                      )}
+                    </Td>
+                    <Td>
+                      <a
+                        href={`https://${domain}/view/${row.issueKey}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-blue-700 hover:underline"
                       >
-                        {isUpdating ? "Updating…" : "Update"}
-                      </button>
-                    ) : (
-                      <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-                        Đã khớp
+                        {row.issueKey}
+                      </a>
+                    </Td>
+                    <Td className="max-w-sm">
+                      <span className="line-clamp-2 text-slate-700" title={row.summary}>
+                        {row.summary}
                       </span>
-                    )}
-                    {errors[row.id] && (
-                      <p className="mt-1 text-xs text-rose-700">{errors[row.id]}</p>
-                    )}
-                  </Td>
-                </tr>
+                    </Td>
+                    <Td className="text-slate-600">{row.statusName}</Td>
+                    <Td className="text-slate-600">{row.assigneeName}</Td>
+                    <Td>{row.startDate ?? "—"}</Td>
+                    <Td
+                      className={row.dueAlert ? "bg-rose-200/70 font-semibold text-rose-900" : ""}
+                    >
+                      <span
+                        title={
+                          row.dueAlert
+                            ? "Due Date <= hôm nay (hoặc chưa điền) — cần vào check lại"
+                            : undefined
+                        }
+                      >
+                        {row.dueDate ?? "Chưa điền"}
+                      </span>
+                    </Td>
+                    <Td className="text-right tabular-nums">{formatHours(row.estimatedHours)}</Td>
+                    <Td
+                      className={`text-right tabular-nums ${
+                        row.actualMismatch ? "bg-amber-100/80 font-medium text-amber-900" : ""
+                      }`}
+                    >
+                      {formatHours(row.actualHours)}
+                    </Td>
+                    <Td className="text-right tabular-nums">
+                      <div className="font-medium text-slate-900">
+                        {formatHours(row.childActualHours)}
+                      </div>
+                      <div className="text-xs text-slate-400">{row.children.length} task con</div>
+                    </Td>
+                    <Td>
+                      {row.actualMismatch ? (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdate(row.id)}
+                          disabled={isUpdating}
+                          title={`Ghi ${formatHours(row.childActualHours)}h vào Actual Hours của G-Task`}
+                          className="h-8 w-full whitespace-nowrap rounded-md bg-slate-900 px-3 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+                        >
+                          {isUpdating ? "Updating…" : "Update"}
+                        </button>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                          Đã khớp
+                        </span>
+                      )}
+                      {errors[row.id] && (
+                        <p className="mt-1 text-xs text-rose-700">{errors[row.id]}</p>
+                      )}
+                    </Td>
+                  </tr>
+                  {isOpen && (
+                    <tr className="bg-slate-50/60">
+                      <td colSpan={11} className="py-2 pr-3 pl-11">
+                        <ChildTaskTable tasks={row.children} domain={domain} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -161,6 +195,56 @@ export function GroupTaskTable({ rows, domain, onUpdate }: Props) {
         }}
       />
     </div>
+  );
+}
+
+function ChildTaskTable({ tasks, domain }: { tasks: ChildTask[]; domain: string }) {
+  return (
+    <table className="w-full text-xs">
+      <thead className="text-left text-[11px] uppercase tracking-wide text-slate-400">
+        <tr>
+          <th className="w-32 py-1 pr-3 font-medium">Task con</th>
+          <th className="py-1 pr-3 font-medium">Summary</th>
+          <th className="w-28 py-1 pr-3 font-medium">Status</th>
+          <th className="w-40 py-1 pr-3 font-medium">Người phụ trách</th>
+          <th className="w-24 py-1 pr-3 font-medium">Start Date</th>
+          <th className="w-24 py-1 pr-3 font-medium">Due Date</th>
+          <th className="w-20 py-1 pr-3 text-right font-medium">Estimate</th>
+          <th className="w-20 py-1 text-right font-medium">Actual</th>
+        </tr>
+      </thead>
+      <tbody>
+        {tasks.map((task) => (
+          <tr key={task.id} className="border-t border-slate-200/70">
+            <td className="py-1.5 pr-3">
+              <a
+                href={`https://${domain}/view/${task.issueKey}`}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-blue-700 hover:underline"
+              >
+                {task.issueKey}
+              </a>
+            </td>
+            <td className="py-1.5 pr-3 text-slate-600">
+              <span className="line-clamp-1" title={task.summary}>
+                {task.summary}
+              </span>
+            </td>
+            <td className="py-1.5 pr-3 text-slate-600">{task.statusName}</td>
+            <td className="py-1.5 pr-3 text-slate-600">{task.assigneeName}</td>
+            <td className="py-1.5 pr-3 tabular-nums text-slate-600">{task.startDate ?? "—"}</td>
+            <td className="py-1.5 pr-3 tabular-nums text-slate-600">{task.dueDate ?? "—"}</td>
+            <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">
+              {formatHours(task.estimatedHours)}
+            </td>
+            <td className="py-1.5 text-right tabular-nums font-medium text-slate-800">
+              {formatHours(task.actualHours)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

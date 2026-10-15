@@ -185,8 +185,22 @@ export type MemberRow = {
   violationDays: number;
 };
 
+/** Task con của G-Task, chỉ giữ field cần hiển thị (bỏ description… cho nhẹ). */
+export type ChildTask = {
+  id: number;
+  issueKey: string;
+  summary: string;
+  statusName: string;
+  assigneeName: string;
+  startDate: string | null;
+  dueDate: string | null;
+  estimatedHours: number | null;
+  actualHours: number | null;
+};
+
 export type ChildTotal = {
-  count: number;
+  /** Danh sách task con, để bung ra xem trong tab G-Task. */
+  tasks: ChildTask[];
   /** Tổng Actual Hours của các task con, task con chưa điền tính là 0. */
   actualHours: number;
 };
@@ -210,7 +224,7 @@ export type GroupTaskRow = {
   estimatedHours: number | null;
   /** Actual Hours đang lưu trên chính G-Task. */
   actualHours: number | null;
-  childCount: number;
+  children: ChildTask[];
   /** Tổng Actual Hours của các task con — giá trị nút "Cập nhật" sẽ ghi vào G-Task. */
   childActualHours: number;
   /** Actual Hours trên G-Task chưa bằng tổng task con. */
