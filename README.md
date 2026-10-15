@@ -1,7 +1,8 @@
 # Backlog Logwork Report
 
 Công cụ thống kê ticket Backlog để kiểm tra logwork trước khi chốt performance.
-Đọc trực tiếp từ Backlog API, không ghi gì lên Backlog.
+Đọc trực tiếp từ Backlog API. Thao tác ghi duy nhất là nút **Update** ở tab
+G-Task của màn PM — chỉ ghi field `Actual Hours` của G-Task, và chỉ khi bấm nút.
 
 ## Tool làm gì
 
@@ -24,6 +25,25 @@ ngày cần sửa.
 
 Tool lấy **tất cả loại ticket**, chỉ loại trừ **GTask** (ticket gộp/umbrella dùng để
 tổng hợp nhiều ticket con — hours của nó là cộng dồn nên tính riêng sẽ bị trùng lặp).
+GTask được xem riêng ở tab G-Task của màn PM.
+
+### Màn PM (`/pm`)
+
+Chọn project + khoảng ngày rồi bấm **Kiểm tra**. Có 2 tab:
+
+- **Log việc theo thành viên** — ma trận thành viên × ngày, ô nào thiếu log / sai rule
+  thì tô màu.
+- **G-Task** — chỉ liệt kê G-Task của project có `Start Date`–`Due Date` giao với
+  khoảng ngày đã chọn (G-Task chưa điền ngày nào: còn mở thì vẫn hiện, đã Closed /
+  Cancel thì bỏ). Bảng phân trang 20 / 50 / 100 dòng. Mỗi dòng có `Estimate Hours`,
+  `Actual Hours` đang lưu trên G-Task và **tổng Actual Hours của các task con** (mọi
+  trạng thái, task con chưa điền tính là 0).
+  - Actual của G-Task khác tổng task con → tô vàng, hiện nút **Update** (rê chuột
+    vào để xem số giờ sẽ ghi). Bấm nút thì server tính lại tổng task con ngay lúc
+    đó rồi ghi vào `Actual Hours` của G-Task (không dùng số đang hiện trên bảng, để
+    không ghi số cũ nếu task con vừa được sửa). API key cần có quyền sửa ticket.
+  - G-Task chưa Closed / Cancel mà `Due Date` <= hôm nay (hoặc chưa điền) → tô đỏ để
+    vào check lại. G-Task đã Closed / Cancel thì không check Due Date.
 
 ### Rule được kiểm tra
 
@@ -179,6 +199,7 @@ Logic nhận diện nằm ở `detectLeaveType()` trong
 src/
   app/
     api/backlog/{me,projects,users,issues}/route.ts   Route handler gọi Backlog API
+    api/backlog/gtasks/route.ts                       Liệt kê G-Task + ghi Actual Hours (PATCH)
     api/acms/report/route.ts                          Route handler gọi ACMS API
     page.tsx
   components/
@@ -187,6 +208,8 @@ src/
     DailyTable.tsx     Bảng theo ngày (bung ra xem ticket)
     TicketTable.tsx    Bảng theo ticket
     AttendanceCompareTable.tsx  Tab đối chiếu chấm công (gọn, không kèm ticket)
+    PmView.tsx         Màn PM (tab thành viên + tab G-Task)
+    GroupTaskTable.tsx Bảng G-Task, nút cập nhật Actual Hours
     SummaryCards.tsx   Thẻ tổng quan
     SettingsDialog.tsx Cấu hình kết nối
     MultiSelect.tsx

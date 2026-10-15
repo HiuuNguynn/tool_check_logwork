@@ -3,8 +3,10 @@ import type {
   AcmsDailyData,
   BacklogIssue,
   DailyRow,
+  ChildTotal,
   DayStatus,
   FieldMapping,
+  GroupTaskRow,
   IssueRow,
   LeaveType,
   MemberDayCell,
@@ -325,4 +327,49 @@ export function buildMemberMatrix(
       violationDays,
     };
   });
+}
+
+/** Status "Closed" mặc định của Backlog, id cố định ở mọi project. */
+const CLOSED_STATUS_ID = 4;
+
+/**
+ * Ticket đã kết thúc: Closed mặc định, hoặc status tự tạo tên "Cancel" /
+ * "Cancelled" — status tự tạo có id khác nhau theo từng project nên dò theo tên.
+ */
+export function isFinishedStatus(status: { id: number; name: string } | undefined): boolean {
+  if (!status) return false;
+  return status.id === CLOSED_STATUS_ID || /^cancel/i.test(status.name.trim());
+}
+
+/**
+ * Dòng G-Task cho màn PM. Actual Hours của G-Task phải bằng tổng Actual Hours
+ * của các task con; G-Task chưa kết thúc mà Due Date <= hôm nay (hoặc chưa
+ * điền) thì báo đỏ để PM vào check lại. G-Task đã Closed/Cancel thì không cần
+ * check Due Date.
+ */
+export function toGroupTaskRow(
+  issue: BacklogIssue,
+  childTotal: ChildTotal | undefined,
+  today: string,
+): GroupTaskRow {
+  const actualHours = toNumber(issue.actualHours);
+  const childActualHours = childTotal?.actualHours ?? 0;
+  const dueDate = toDateKey(issue.dueDate);
+
+  return {
+    id: issue.id,
+    issueKey: issue.issueKey,
+    summary: issue.summary,
+    statusName: issue.status?.name ?? "",
+    assigneeName: issue.assignee?.name ?? "(chưa gán)",
+    startDate: toDateKey(issue.startDate),
+    dueDate,
+    estimatedHours: toNumber(issue.estimatedHours),
+    actualHours,
+    childCount: childTotal?.count ?? 0,
+    childActualHours,
+    // G-Task chưa điền Actual và không có giờ con nào thì coi như đã khớp (0 = 0).
+    actualMismatch: !sameHours(actualHours ?? 0, childActualHours),
+    dueAlert: !isFinishedStatus(issue.status) && (dueDate === null || dueDate <= today),
+  };
 }

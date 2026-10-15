@@ -4,21 +4,36 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { GroupTaskTable } from "./GroupTaskTable";
 import { MultiSelect, type Option } from "./MultiSelect";
 import { PmMatrix, type SelectedCell } from "./PmMatrix";
 import { firstDayOfMonth, lastDayOfMonth, shiftDays, todayKey } from "@/lib/date";
-import { buildMemberMatrix, formatHours, toIssueRow } from "@/lib/report";
+import {
+  buildMemberMatrix,
+  formatHours,
+  toGroupTaskRow,
+  toIssueRow,
+} from "@/lib/report";
 import {
   authHeaders,
   DEFAULT_SETTINGS,
   loadSettings,
   type Settings,
 } from "@/lib/settings";
-import type { BacklogIssue, IssueRow, IssuesResponse, MemberRow } from "@/lib/types";
+import type {
+  BacklogIssue,
+  ChildTotal,
+  GroupTaskRow,
+  GroupTasksResponse,
+  IssueRow,
+  IssuesResponse,
+  MemberRow,
+} from "@/lib/types";
 
 type Me = { id: number; name: string; domain: string };
 type Member = { id: number; name: string };
 type Range = { from: string; to: string };
+type Tab = "members" | "gtask";
 
 async function getJson<T>(url: string, settings: Settings): Promise<T> {
   const response = await fetch(url, { headers: authHeaders(settings) });
@@ -66,9 +81,13 @@ export function PmView() {
     parseIdList(searchParams.get("projectIds")),
   );
   const [range, setRange] = useState<Range>(() => rangeFromSearchParams(searchParams));
+  const [tab, setTab] = useState<Tab>(() =>
+    searchParams.get("tab") === "gtask" ? "gtask" : "members",
+  );
 
   const [members, setMembers] = useState<Member[]>([]);
   const [issues, setIssues] = useState<BacklogIssue[] | null>(null);
+  const [groupTasks, setGroupTasks] = useState<GroupTasksResponse | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,14 +102,15 @@ export function PmView() {
     setReady(true);
   }, []);
 
-  // Đồng bộ project + khoảng ngày lên URL để F5 không mất lựa chọn.
+  // Đồng bộ project + khoảng ngày + tab lên URL để F5 không mất lựa chọn.
   useEffect(() => {
     const params = new URLSearchParams();
     params.set("projectIds", projectIds.join(","));
     params.set("from", range.from);
     params.set("to", range.to);
+    if (tab !== "members") params.set("tab", tab);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [projectIds, range, pathname, router]);
+  }, [projectIds, range, tab, pathname, router]);
 
   useEffect(() => {
     if (!ready) return;
@@ -143,16 +163,24 @@ export function PmView() {
         assigneeIds: "",
         statusIds: "",
       });
-      const [memberList, issuesResult] = await Promise.all([
+      const groupTaskParams = new URLSearchParams({
+        from: range.from,
+        to: range.to,
+        projectIds: projectKey,
+      });
+      const [memberList, issuesResult, groupTaskResult] = await Promise.all([
         getJson<Member[]>(`/api/backlog/users?projectIds=${projectKey}`, settings),
         getJson<IssuesResponse>(`/api/backlog/issues?${params}`, settings),
+        getJson<GroupTasksResponse>(`/api/backlog/gtasks?${groupTaskParams}`, settings),
       ]);
       setMembers(memberList);
       setIssues(issuesResult.issues);
-      setTruncated(issuesResult.truncated);
+      setGroupTasks(groupTaskResult);
+      setTruncated(issuesResult.truncated || groupTaskResult.truncated);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Lỗi khi tải dữ liệu");
       setIssues(null);
+      setGroupTasks(null);
     } finally {
       setLoading(false);
     }
@@ -191,6 +219,44 @@ export function PmView() {
     if (!selected) return "";
     return memberRows.find((row) => row.userId === selected.userId)?.userName ?? "";
   }, [memberRows, selected]);
+
+  const groupTaskRows = useMemo<GroupTaskRow[]>(() => {
+    if (!groupTasks) return [];
+    const today = todayKey();
+    return groupTasks.issues
+      .map((issue) => toGroupTaskRow(issue, groupTasks.childTotals[issue.id], today))
+      .sort(
+        (a, b) =>
+          Number(b.dueAlert) + Number(b.actualMismatch) -
+            (Number(a.dueAlert) + Number(a.actualMismatch)) ||
+          (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") ||
+          a.issueKey.localeCompare(b.issueKey),
+      );
+  }, [groupTasks]);
+
+  const updateGroupTask = useCallback(
+    async (issueId: number) => {
+      const headers = new Headers(authHeaders(settings));
+      headers.set("content-type", "application/json");
+      const response = await fetch("/api/backlog/gtasks", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ issueId }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.error ?? `Lỗi ${response.status}`);
+
+      const { issue, childTotal } = body as { issue: BacklogIssue; childTotal: ChildTotal };
+      setGroupTasks((current) =>
+        current && {
+          ...current,
+          issues: current.issues.map((item) => (item.id === issue.id ? issue : item)),
+          childTotals: { ...current.childTotals, [issue.id]: childTotal },
+        },
+      );
+    },
+    [settings],
+  );
 
   const domain = me?.domain ?? settings.domain;
 
@@ -303,17 +369,38 @@ export function PmView() {
         </div>
       ) : (
         <>
-          <SummaryStrip memberRows={memberRows} />
-          <Legend />
-          <PmMatrix rows={memberRows} selected={selected} onSelectCell={setSelected} />
-          {selected && (
-            <SelectedDetail
-              memberName={selectedMemberName}
-              date={selected.date}
-              rows={selectedRows}
-              domain={domain}
-              onClose={() => setSelected(null)}
-            />
+          <div className="inline-flex rounded-lg bg-slate-200 p-1">
+            <TabButton active={tab === "members"} onClick={() => setTab("members")}>
+              Log việc theo thành viên
+            </TabButton>
+            <TabButton active={tab === "gtask"} onClick={() => setTab("gtask")}>
+              G-Task ({groupTaskRows.length})
+            </TabButton>
+          </div>
+
+          {tab === "members" && (
+            <>
+              <SummaryStrip memberRows={memberRows} />
+              <Legend />
+              <PmMatrix rows={memberRows} selected={selected} onSelectCell={setSelected} />
+              {selected && (
+                <SelectedDetail
+                  memberName={selectedMemberName}
+                  date={selected.date}
+                  rows={selectedRows}
+                  domain={domain}
+                  onClose={() => setSelected(null)}
+                />
+              )}
+            </>
+          )}
+
+          {tab === "gtask" && (
+            <>
+              <GroupTaskSummary rows={groupTaskRows} />
+              <GroupTaskLegend />
+              <GroupTaskTable rows={groupTaskRows} domain={domain} onUpdate={updateGroupTask} />
+            </>
           )}
         </>
       )}
@@ -336,6 +423,72 @@ function QuickButton({
     >
       {children}
     </button>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-md px-4 py-1.5 text-sm font-medium ${
+        active ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function GroupTaskSummary({ rows }: { rows: GroupTaskRow[] }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <StatCard label="G-Task" value={rows.length} />
+      <StatCard
+        label="Actual đã khớp tổng task con"
+        value={rows.filter((row) => !row.actualMismatch).length}
+        tone="emerald"
+      />
+      <StatCard
+        label="Actual chưa khớp, cần cập nhật"
+        value={rows.filter((row) => row.actualMismatch).length}
+        tone="amber"
+      />
+      <StatCard
+        label="Chưa Closed/Cancel, Due Date <= hôm nay"
+        value={rows.filter((row) => row.dueAlert).length}
+        tone="rose"
+      />
+    </div>
+  );
+}
+
+function GroupTaskLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
+      <LegendDot
+        className="bg-rose-200"
+        label="G-Task chưa Closed/Cancel mà Due Date <= hôm nay (hoặc chưa điền) — cần vào check để sửa"
+      />
+      <LegendDot
+        className="bg-amber-100"
+        label="Actual Hours của G-Task chưa bằng tổng Actual Hours task con"
+      />
+      <span className="inline-flex items-center gap-1.5">
+        <span className="rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-medium text-white">
+          Update
+        </span>
+        Tính lại tổng Actual task con ngay lúc bấm rồi ghi vào Actual Hours của G-Task
+      </span>
+    </div>
   );
 }
 

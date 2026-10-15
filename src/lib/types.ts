@@ -11,6 +11,12 @@ export type BacklogProject = {
   name: string;
 };
 
+export type BacklogIssueType = {
+  id: number;
+  projectId: number;
+  name: string;
+};
+
 export type BacklogCustomField = {
   id: number;
   fieldTypeId: number;
@@ -23,6 +29,8 @@ export type BacklogIssue = {
   issueKey: string;
   summary: string;
   projectId: number;
+  /** Có giá trị khi ticket là task con (VD: task con của một G-Task). */
+  parentIssueId?: number | null;
   status: { id: number; name: string };
   issueType: { id: number; name: string };
   assignee: BacklogUser | null;
@@ -175,4 +183,38 @@ export type MemberRow = {
   missingDays: number;
   /** Số ngày có ticket nhưng sai rule ngày/giờ. */
   violationDays: number;
+};
+
+export type ChildTotal = {
+  count: number;
+  /** Tổng Actual Hours của các task con, task con chưa điền tính là 0. */
+  actualHours: number;
+};
+
+export type GroupTasksResponse = {
+  issues: BacklogIssue[];
+  /** key: id của G-Task. */
+  childTotals: Record<number, ChildTotal>;
+  truncated: boolean;
+};
+
+/** Một dòng trong tab G-Task của màn PM. */
+export type GroupTaskRow = {
+  id: number;
+  issueKey: string;
+  summary: string;
+  statusName: string;
+  assigneeName: string;
+  startDate: string | null;
+  dueDate: string | null;
+  estimatedHours: number | null;
+  /** Actual Hours đang lưu trên chính G-Task. */
+  actualHours: number | null;
+  childCount: number;
+  /** Tổng Actual Hours của các task con — giá trị nút "Cập nhật" sẽ ghi vào G-Task. */
+  childActualHours: number;
+  /** Actual Hours trên G-Task chưa bằng tổng task con. */
+  actualMismatch: boolean;
+  /** G-Task chưa Closed/Cancel mà Due Date <= hôm nay (hoặc chưa điền) — cần vào check để sửa. */
+  dueAlert: boolean;
 };

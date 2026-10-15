@@ -2,10 +2,14 @@ import "server-only";
 
 import type {
   BacklogIssue,
+  BacklogIssueType,
   BacklogProject,
   BacklogUser,
+  ChildTotal,
+  GroupTasksResponse,
   IssuesResponse,
 } from "./types";
+import { isFinishedStatus, round2 } from "./report";
 
 export const PAGE_SIZE = 100;
 export const MAX_PAGES = 25;
@@ -74,10 +78,13 @@ async function backlogFetch<T>(
   creds: Credentials,
   path: string,
   query: Query = {},
+  init: { method?: string; body?: URLSearchParams } = {},
 ): Promise<T> {
   let response: Response;
   try {
     response = await fetch(buildUrl(creds, path, query), {
+      method: init.method ?? "GET",
+      body: init.body,
       cache: "no-store",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -122,6 +129,28 @@ export function fetchSpaceUsers(creds: Credentials) {
   return backlogFetch<BacklogUser[]>(creds, "/users");
 }
 
+export function fetchIssue(creds: Credentials, issueIdOrKey: number | string) {
+  return backlogFetch<BacklogIssue>(creds, `/issues/${issueIdOrKey}`);
+}
+
+function fetchIssueTypes(creds: Credentials, projectId: number) {
+  return backlogFetch<BacklogIssueType[]>(creds, `/projects/${projectId}/issueTypes`);
+}
+
+/** Thao tác ghi duy nhất của app: chỉ đổi Actual Hours, không đụng field khác. */
+export function updateActualHours(
+  creds: Credentials,
+  issueId: number,
+  actualHours: number,
+) {
+  return backlogFetch<BacklogIssue>(
+    creds,
+    `/issues/${issueId}`,
+    {},
+    { method: "PATCH", body: new URLSearchParams({ actualHours: String(actualHours) }) },
+  );
+}
+
 async function fetchIssuePages(
   creds: Credentials,
   query: Query,
@@ -153,11 +182,12 @@ export type IssueQuery = {
 };
 
 /** "GTask" / "G-Task" / "g task" đều coi là ticket gộp, không tính vào logwork. */
-function isGroupTask(issue: BacklogIssue): boolean {
-  const normalized = (issue.issueType?.name ?? "")
-    .toLowerCase()
-    .replace(/[\s_-]+/g, "");
-  return normalized === "gtask";
+function isGroupTaskType(name: string | undefined): boolean {
+  return (name ?? "").toLowerCase().replace(/[\s_-]+/g, "") === "gtask";
+}
+
+export function isGroupTask(issue: BacklogIssue): boolean {
+  return isGroupTaskType(issue.issueType?.name);
 }
 
 /**
@@ -199,5 +229,81 @@ export async function fetchIssues(
     issues,
     truncated,
     fetched: issues.length,
+  };
+}
+
+/** Số parent id mỗi lần gọi, để URL không quá dài. */
+const PARENT_BATCH_SIZE = 50;
+
+/**
+ * Cộng Actual Hours của toàn bộ task con (mọi trạng thái) theo từng G-Task.
+ * Backlog chỉ có 1 cấp cha-con nên không cần đệ quy.
+ */
+export async function fetchChildTotals(
+  creds: Credentials,
+  parentIds: number[],
+): Promise<{ totals: Record<number, ChildTotal>; truncated: boolean }> {
+  const totals: Record<number, ChildTotal> = {};
+  for (const id of parentIds) totals[id] = { count: 0, actualHours: 0 };
+  let truncated = false;
+
+  for (let start = 0; start < parentIds.length; start += PARENT_BATCH_SIZE) {
+    const result = await fetchIssuePages(creds, {
+      "parentIssueId[]": parentIds.slice(start, start + PARENT_BATCH_SIZE),
+    });
+    truncated = truncated || result.truncated;
+    for (const child of result.issues) {
+      const total = child.parentIssueId ? totals[child.parentIssueId] : undefined;
+      if (!total) continue;
+      total.count += 1;
+      total.actualHours = round2(total.actualHours + (child.actualHours ?? 0));
+    }
+  }
+
+  return { totals, truncated };
+}
+
+/**
+ * G-Task của các project có [startDate, dueDate] giao với khoảng [from, to].
+ * Backlog không lọc được kiểu "khoảng giao nhau" nên lấy hết G-Task (mọi trạng
+ * thái, lọc theo issueTypeId nên số lượng nhỏ) rồi lọc lại ở đây. G-Task chưa
+ * điền cả 2 ngày thì không xếp được vào khoảng nào: còn mở thì giữ lại để PM
+ * thấy mà điền, đã Closed/Cancel thì bỏ — dữ liệu thật có rất nhiều G-Task cũ
+ * kiểu này, giữ lại thì tháng nào cũng hiện ra.
+ */
+export async function fetchGroupTasks(
+  creds: Credentials,
+  query: { projectIds: number[]; from: string; to: string },
+): Promise<GroupTasksResponse> {
+  const typeLists = await Promise.all(
+    query.projectIds.map((projectId) => fetchIssueTypes(creds, projectId)),
+  );
+  const typeIds = typeLists
+    .flat()
+    .filter((type) => isGroupTaskType(type.name))
+    .map((type) => type.id);
+  if (!typeIds.length) return { issues: [], childTotals: {}, truncated: false };
+
+  const result = await fetchIssuePages(creds, {
+    "projectId[]": query.projectIds,
+    "issueTypeId[]": typeIds,
+  });
+
+  const issues = result.issues.filter((issue) => {
+    const start = issue.startDate?.slice(0, 10) ?? null;
+    const due = issue.dueDate?.slice(0, 10) ?? null;
+    if (!start && !due) return !isFinishedStatus(issue.status);
+    return (start ?? due!) <= query.to && (due ?? start!) >= query.from;
+  });
+
+  const children = await fetchChildTotals(
+    creds,
+    issues.map((issue) => issue.id),
+  );
+
+  return {
+    issues,
+    childTotals: children.totals,
+    truncated: result.truncated || children.truncated,
   };
 }
