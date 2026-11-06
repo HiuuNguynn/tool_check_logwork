@@ -7,6 +7,8 @@ import type { ComplianceCode, MemberCompliance } from "@/lib/types";
 
 type Props = {
   members: MemberCompliance[];
+  /** Khoảng ngày đã dùng để lọc subtask. */
+  range: { from: string; to: string };
   domain: string;
   /** Có ít nhất 1 subtask thuộc project đã tạo field Reschedule. */
   hasRescheduleField: boolean;
@@ -38,6 +40,7 @@ function percent(rate: number): string {
 
 export function ComplianceView({
   members,
+  range,
   domain,
   hasRescheduleField,
   dueHistory,
@@ -74,8 +77,10 @@ export function ComplianceView({
 
       <div className="space-y-2 rounded-xl bg-white p-4 text-xs text-slate-600 shadow-sm ring-1 ring-slate-200">
         <p>
-          Kiểm tra subtask của các G-Task đang hiển thị theo Guideline đo Performance (Trục
-          Tiến độ). Không tính ticket Bug/Feedback và subtask đã Cancel. Tỷ lệ tuân thủ dưới{" "}
+          Kiểm tra subtask từ <strong>{range.from}</strong> đến <strong>{range.to}</strong>{" "}
+          theo Guideline đo Performance (Trục Tiến độ). Subtask được xếp vào ngày theo Actual
+          End-date, thiếu thì Due Date rồi Start Date; chưa điền ngày nào thì chỉ tính khi còn
+          mở. Không tính ticket Bug/Feedback và subtask đã Cancel. Tỷ lệ tuân thủ dưới{" "}
           {percent(COMPLIANCE_THRESHOLD)} thì kết quả tiến độ của kỳ cần PQA xác nhận lại.
         </p>
         <div className="flex flex-wrap items-center gap-3">

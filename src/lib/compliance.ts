@@ -131,39 +131,66 @@ export function checkSubtask(
  * Tỷ lệ tuân thủ dữ liệu theo người (mục 10): số subtask không có lỗi dữ liệu ÷
  * tổng số subtask được đánh giá của các G-Task đang hiển thị. Người kém nhất lên đầu.
  */
+export type DateRange = { from: string; to: string };
+
+/**
+ * Subtask thuộc khoảng ngày đang xem: lấy Actual End-date, thiếu thì Due Date
+ * rồi Start Date (giống cách màn chính xếp ticket vào ngày). G-Task kéo dài
+ * nhiều tháng nên không thể lấy hết task con của G-Task giao với khoảng ngày.
+ * Subtask chưa điền ngày nào thì không xếp được vào kỳ: còn mở thì vẫn giữ để
+ * thấy mà sửa, đã Closed thì bỏ.
+ */
+function inRange(task: ChildTask, actualEndFieldName: string, range: DateRange): boolean {
+  const actualEndDate = toDateKey(findField(task, actualEndFieldName)?.value);
+  const date = actualEndDate ?? task.dueDate ?? task.startDate;
+  if (!date) return !isFinishedStatus({ id: task.statusId, name: task.statusName });
+  return date >= range.from && date <= range.to;
+}
+
+/** Subtask được đánh giá và nằm trong khoảng ngày, kèm key G-Task cha. */
+function subtasksInRange(
+  rows: GroupTaskRow[],
+  actualEndFieldName: string,
+  range: DateRange,
+): { task: ChildTask; groupTaskKey: string }[] {
+  return rows.flatMap((row) =>
+    row.children
+      .filter((task) => isEvaluatedSubtask(task) && inRange(task, actualEndFieldName, range))
+      .map((task) => ({ task, groupTaskKey: row.issueKey })),
+  );
+}
+
 export function buildMemberCompliance(
   rows: GroupTaskRow[],
   actualEndFieldName: string,
+  range: DateRange,
   dueEdits: Record<number, DueDateEdit[]> | null,
 ): MemberCompliance[] {
   const byMember = new Map<number | null, MemberCompliance>();
 
-  for (const row of rows) {
-    for (const task of row.children) {
-      if (!isEvaluatedSubtask(task)) continue;
-      const check = checkSubtask(
-        task,
-        row.issueKey,
-        actualEndFieldName,
-        dueEdits ? (dueEdits[task.id] ?? null) : null,
-      );
+  for (const { task, groupTaskKey } of subtasksInRange(rows, actualEndFieldName, range)) {
+    const check = checkSubtask(
+      task,
+      groupTaskKey,
+      actualEndFieldName,
+      dueEdits ? (dueEdits[task.id] ?? null) : null,
+    );
 
-      let member = byMember.get(task.assigneeId);
-      if (!member) {
-        member = {
-          assigneeId: task.assigneeId,
-          assigneeName: task.assigneeName,
-          total: 0,
-          compliant: 0,
-          rate: 0,
-          checks: [],
-        };
-        byMember.set(task.assigneeId, member);
-      }
-      member.total += 1;
-      if (!check.violations.length) member.compliant += 1;
-      member.checks.push(check);
+    let member = byMember.get(task.assigneeId);
+    if (!member) {
+      member = {
+        assigneeId: task.assigneeId,
+        assigneeName: task.assigneeName,
+        total: 0,
+        compliant: 0,
+        rate: 0,
+        checks: [],
+      };
+      byMember.set(task.assigneeId, member);
     }
+    member.total += 1;
+    if (!check.violations.length) member.compliant += 1;
+    member.checks.push(check);
   }
 
   return [...byMember.values()]
@@ -173,9 +200,11 @@ export function buildMemberCompliance(
     );
 }
 
-/** Id các subtask được đánh giá, để đọc lịch sử sửa Due date. */
-export function evaluatedSubtaskIds(rows: GroupTaskRow[]): number[] {
-  return rows.flatMap((row) =>
-    row.children.filter(isEvaluatedSubtask).map((task) => task.id),
-  );
+/** Id các subtask được đánh giá trong khoảng ngày, để đọc lịch sử sửa Due date. */
+export function evaluatedSubtaskIds(
+  rows: GroupTaskRow[],
+  actualEndFieldName: string,
+  range: DateRange,
+): number[] {
+  return subtasksInRange(rows, actualEndFieldName, range).map(({ task }) => task.id);
 }

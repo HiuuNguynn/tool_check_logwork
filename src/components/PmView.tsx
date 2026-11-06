@@ -10,10 +10,12 @@ import { MultiSelect, type Option } from "./MultiSelect";
 import { PmMatrix, type SelectedCell } from "./PmMatrix";
 import {
   buildMemberCompliance,
+  checkSubtask,
   DUE_HISTORY_LIMIT,
   evaluatedSubtaskIds,
   hasRescheduleField,
 } from "@/lib/compliance";
+import { isEvaluatedSubtask } from "@/lib/subtask";
 import { firstDayOfMonth, lastDayOfMonth, shiftDays, todayKey } from "@/lib/date";
 import {
   buildMemberMatrix,
@@ -105,6 +107,9 @@ export function PmView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
+  // Khoảng ngày của lần bấm "Kiểm tra" gần nhất — dữ liệu G-Task được tải theo
+  // khoảng này, nên tab Tuân thủ lọc theo nó chứ không theo ô ngày đang sửa dở.
+  const [loadedRange, setLoadedRange] = useState<Range>(range);
   // Gộp dần qua nhiều lượt "Đọc tiếp", key: id subtask đã đọc lịch sử.
   const [dueEdits, setDueEdits] = useState<Record<number, DueDateEdit[]> | null>(null);
   const [dueHistoryLoading, setDueHistoryLoading] = useState(false);
@@ -195,6 +200,7 @@ export function PmView() {
       setMembers(memberList);
       setIssues(issuesResult.issues);
       setGroupTasks(groupTaskResult);
+      setLoadedRange(range);
       setTruncated(issuesResult.truncated || groupTaskResult.truncated);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Lỗi khi tải dữ liệu");
@@ -258,25 +264,42 @@ export function PmView() {
       buildMemberCompliance(
         groupTaskRows,
         settings.mapping.actualEndDate,
+        loadedRange,
         dueEdits,
       ),
-    [groupTaskRows, settings.mapping.actualEndDate, dueEdits],
+    [groupTaskRows, settings.mapping.actualEndDate, loadedRange, dueEdits],
   );
 
+  // Bảng task con ở tab G-Task hiện đủ mọi task con, nên kiểm tra tất cả chứ
+  // không chỉ những task con nằm trong khoảng ngày như tab Tuân thủ.
   const subtaskChecks = useMemo(() => {
     const byId = new Map<number, SubtaskCheck>();
-    for (const member of memberCompliance) {
-      for (const check of member.checks) byId.set(check.task.id, check);
+    for (const row of groupTaskRows) {
+      for (const task of row.children) {
+        if (!isEvaluatedSubtask(task)) continue;
+        byId.set(
+          task.id,
+          checkSubtask(
+            task,
+            row.issueKey,
+            settings.mapping.actualEndDate,
+            dueEdits?.[task.id] ?? null,
+          ),
+        );
+      }
     }
     return byId;
-  }, [memberCompliance]);
+  }, [groupTaskRows, settings.mapping.actualEndDate, dueEdits]);
 
   const rescheduleFieldExists = useMemo(
     () => groupTaskRows.some((row) => row.children.some(hasRescheduleField)),
     [groupTaskRows],
   );
 
-  const subtaskIds = useMemo(() => evaluatedSubtaskIds(groupTaskRows), [groupTaskRows]);
+  const subtaskIds = useMemo(
+    () => evaluatedSubtaskIds(groupTaskRows, settings.mapping.actualEndDate, loadedRange),
+    [groupTaskRows, settings.mapping.actualEndDate, loadedRange],
+  );
   const unreadSubtaskIds = useMemo(
     () => subtaskIds.filter((id) => !dueEdits || !(id in dueEdits)),
     [subtaskIds, dueEdits],
@@ -491,6 +514,7 @@ export function PmView() {
           {tab === "compliance" && (
             <ComplianceView
               members={memberCompliance}
+              range={loadedRange}
               domain={domain}
               hasRescheduleField={rescheduleFieldExists}
               dueHistory={{

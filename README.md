@@ -51,8 +51,10 @@ Chọn project + khoảng ngày rồi bấm **Kiểm tra**. Có 3 tab:
     việc chuẩn của role; bung task con để xem subtask nào sai quy ước.
     `[ui][Designer]` chỉ bắt buộc khi có màn hình mới nên tool không check.
 - **Tuân thủ dữ liệu** — tỷ lệ subtask đúng quy định dữ liệu theo từng người (dưới
-  90% thì kết quả tiến độ của kỳ cần PQA xác nhận lại). Chỉ xét subtask của các
-  G-Task đang hiển thị, bỏ ticket Bug / Feedback và subtask đã Cancel. Lỗi bị bắt:
+  90% thì kết quả tiến độ của kỳ cần PQA xác nhận lại). Chỉ xét subtask (của các
+  G-Task đang hiển thị) nằm trong khoảng ngày đã chọn — xếp theo `Actual End-date`,
+  thiếu thì `Due Date` rồi `Start Date`; chưa điền ngày nào thì chỉ tính khi còn mở.
+  Bỏ ticket Bug / Feedback và subtask đã Cancel. Lỗi bị bắt:
   chưa gán người, thiếu `Due Date`, Closed mà thiếu `Actual End-date`,
   `Actual End-date` sớm hơn `Start Date`, có `Reschedule` mà thiếu
   `Reschedule Reason`, lý do nhóm E mà thiếu `Reschedule Evidence` (chỉ khi project
