@@ -4,9 +4,16 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { ComplianceView } from "./ComplianceView";
 import { GroupTaskTable } from "./GroupTaskTable";
 import { MultiSelect, type Option } from "./MultiSelect";
 import { PmMatrix, type SelectedCell } from "./PmMatrix";
+import {
+  buildMemberCompliance,
+  DUE_HISTORY_LIMIT,
+  evaluatedSubtaskIds,
+  hasRescheduleField,
+} from "@/lib/compliance";
 import { firstDayOfMonth, lastDayOfMonth, shiftDays, todayKey } from "@/lib/date";
 import {
   buildMemberMatrix,
@@ -23,17 +30,25 @@ import {
 import type {
   BacklogIssue,
   ChildTotal,
+  DueDateEdit,
+  DueHistoryResponse,
   GroupTaskRow,
   GroupTasksResponse,
   IssueRow,
   IssuesResponse,
+  MemberCompliance,
   MemberRow,
+  SubtaskCheck,
 } from "@/lib/types";
 
 type Me = { id: number; name: string; domain: string };
 type Member = { id: number; name: string };
 type Range = { from: string; to: string };
-type Tab = "members" | "gtask";
+type Tab = "members" | "gtask" | "compliance";
+
+function parseTab(value: string | null): Tab {
+  return value === "gtask" || value === "compliance" ? value : "members";
+}
 
 async function getJson<T>(url: string, settings: Settings): Promise<T> {
   const response = await fetch(url, { headers: authHeaders(settings) });
@@ -81,9 +96,7 @@ export function PmView() {
     parseIdList(searchParams.get("projectIds")),
   );
   const [range, setRange] = useState<Range>(() => rangeFromSearchParams(searchParams));
-  const [tab, setTab] = useState<Tab>(() =>
-    searchParams.get("tab") === "gtask" ? "gtask" : "members",
-  );
+  const [tab, setTab] = useState<Tab>(() => parseTab(searchParams.get("tab")));
 
   const [members, setMembers] = useState<Member[]>([]);
   const [issues, setIssues] = useState<BacklogIssue[] | null>(null);
@@ -92,6 +105,10 @@ export function PmView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
+  // Gộp dần qua nhiều lượt "Đọc tiếp", key: id subtask đã đọc lịch sử.
+  const [dueEdits, setDueEdits] = useState<Record<number, DueDateEdit[]> | null>(null);
+  const [dueHistoryLoading, setDueHistoryLoading] = useState(false);
+  const [dueHistoryError, setDueHistoryError] = useState<string | null>(null);
 
   // F5 phải khôi phục lại đúng lựa chọn trước đó rồi tự chạy lại, chứ không
   // chỉ khôi phục input mà bỏ trống bảng.
@@ -154,6 +171,8 @@ export function PmView() {
     setLoading(true);
     setError(null);
     setSelected(null);
+    setDueEdits(null);
+    setDueHistoryError(null);
     try {
       const projectKey = projectIds.join(",");
       const params = new URLSearchParams({
@@ -233,6 +252,64 @@ export function PmView() {
           a.issueKey.localeCompare(b.issueKey),
       );
   }, [groupTasks]);
+
+  const memberCompliance = useMemo<MemberCompliance[]>(
+    () =>
+      buildMemberCompliance(
+        groupTaskRows,
+        settings.mapping.actualEndDate,
+        dueEdits,
+      ),
+    [groupTaskRows, settings.mapping.actualEndDate, dueEdits],
+  );
+
+  const subtaskChecks = useMemo(() => {
+    const byId = new Map<number, SubtaskCheck>();
+    for (const member of memberCompliance) {
+      for (const check of member.checks) byId.set(check.task.id, check);
+    }
+    return byId;
+  }, [memberCompliance]);
+
+  const rescheduleFieldExists = useMemo(
+    () => groupTaskRows.some((row) => row.children.some(hasRescheduleField)),
+    [groupTaskRows],
+  );
+
+  const subtaskIds = useMemo(() => evaluatedSubtaskIds(groupTaskRows), [groupTaskRows]);
+  const unreadSubtaskIds = useMemo(
+    () => subtaskIds.filter((id) => !dueEdits || !(id in dueEdits)),
+    [subtaskIds, dueEdits],
+  );
+
+  const loadDueHistory = useCallback(async () => {
+    setDueHistoryLoading(true);
+    setDueHistoryError(null);
+    try {
+      const headers = new Headers(authHeaders(settings));
+      headers.set("content-type", "application/json");
+      const response = await fetch("/api/backlog/due-history", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ issueIds: unreadSubtaskIds }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.error ?? `Lỗi ${response.status}`);
+      const result = body as DueHistoryResponse;
+      setDueEdits((current) => ({ ...current, ...result.edits }));
+      if (result.rateLimited) {
+        setDueHistoryError(
+          "Backlog giới hạn 600 request/phút nên đã dừng giữa chừng. Đợi khoảng 1 phút rồi bấm Đọc tiếp.",
+        );
+      }
+    } catch (caught) {
+      setDueHistoryError(
+        caught instanceof Error ? caught.message : "Không đọc được lịch sử Due Date",
+      );
+    } finally {
+      setDueHistoryLoading(false);
+    }
+  }, [unreadSubtaskIds, settings]);
 
   const updateGroupTask = useCallback(
     async (issueId: number) => {
@@ -376,6 +453,9 @@ export function PmView() {
             <TabButton active={tab === "gtask"} onClick={() => setTab("gtask")}>
               G-Task ({groupTaskRows.length})
             </TabButton>
+            <TabButton active={tab === "compliance"} onClick={() => setTab("compliance")}>
+              Tuân thủ dữ liệu
+            </TabButton>
           </div>
 
           {tab === "members" && (
@@ -399,8 +479,29 @@ export function PmView() {
             <>
               <GroupTaskSummary rows={groupTaskRows} />
               <GroupTaskLegend />
-              <GroupTaskTable rows={groupTaskRows} domain={domain} onUpdate={updateGroupTask} />
+              <GroupTaskTable
+                rows={groupTaskRows}
+                domain={domain}
+                checks={subtaskChecks}
+                onUpdate={updateGroupTask}
+              />
             </>
+          )}
+
+          {tab === "compliance" && (
+            <ComplianceView
+              members={memberCompliance}
+              domain={domain}
+              hasRescheduleField={rescheduleFieldExists}
+              dueHistory={{
+                read: subtaskIds.length - unreadSubtaskIds.length,
+                total: subtaskIds.length,
+                loading: dueHistoryLoading,
+                error: dueHistoryError,
+                limit: DUE_HISTORY_LIMIT,
+              }}
+              onLoadDueHistory={loadDueHistory}
+            />
           )}
         </>
       )}
@@ -450,7 +551,7 @@ function TabButton({
 
 function GroupTaskSummary({ rows }: { rows: GroupTaskRow[] }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
       <StatCard label="G-Task" value={rows.length} />
       <StatCard
         label="Actual đã khớp tổng task con"
@@ -466,6 +567,11 @@ function GroupTaskSummary({ rows }: { rows: GroupTaskRow[] }) {
         label="Chưa Closed/Cancel, Due Date <= hôm nay"
         value={rows.filter((row) => row.dueAlert).length}
         tone="rose"
+      />
+      <StatCard
+        label="Thiếu subtask bắt buộc"
+        value={rows.filter((row) => row.missingRequired.length).length}
+        tone="amber"
       />
     </div>
   );
@@ -487,6 +593,11 @@ function GroupTaskLegend() {
           Update
         </span>
         Tính lại tổng Actual task con ngay lúc bấm rồi ghi vào Actual Hours của G-Task
+      </span>
+      <span>
+        Subtask bắt buộc: [srs][BA], [code][BE/FE], [tc][Tester], [itst][Tester] — tên
+        subtask theo quy ước <code>[mã][Role] Tên việc</code>. [ui][Designer] chỉ bắt buộc khi
+        có màn hình mới nên tool không check.
       </span>
     </div>
   );

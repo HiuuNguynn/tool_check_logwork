@@ -38,6 +38,8 @@ export type BacklogIssue = {
   dueDate: string | null;
   estimatedHours: number | null;
   actualHours: number | null;
+  /** Thời điểm tạo ticket, ISO UTC. */
+  created: string;
   customFields?: BacklogCustomField[];
 };
 
@@ -190,12 +192,67 @@ export type ChildTask = {
   id: number;
   issueKey: string;
   summary: string;
+  statusId: number;
   statusName: string;
+  issueTypeName: string;
+  assigneeId: number | null;
   assigneeName: string;
   startDate: string | null;
   dueDate: string | null;
   estimatedHours: number | null;
   actualHours: number | null;
+  /** Thời điểm tạo ticket, ISO UTC. */
+  created: string;
+  /** Giữ cả field rỗng: field có mặt nghĩa là project có cấu hình field đó. */
+  customFields: { name: string; value: unknown }[];
+};
+
+/** Lỗi dữ liệu của 1 subtask theo trục Tiến độ của guideline (mục 2, 3, 4, 11). */
+export type ComplianceCode =
+  | "NO_ASSIGNEE"
+  | "NO_DUE_DATE"
+  | "NO_ACTUAL_END"
+  | "END_BEFORE_START"
+  | "RESCHEDULE_NO_REASON"
+  | "RESCHEDULE_NO_EVIDENCE"
+  | "DUE_EDITED";
+
+export type ComplianceViolation = {
+  code: ComplianceCode;
+  message: string;
+};
+
+/** Một lần sửa Due date đọc từ changeLog của comment trên Backlog. */
+export type DueDateEdit = {
+  /** Thời điểm sửa, ISO UTC như Backlog trả về. */
+  changedAt: string;
+  from: string | null;
+  to: string | null;
+};
+
+export type DueHistoryResponse = {
+  /** key: id của subtask. Chỉ có các id đã đọc được lịch sử. */
+  edits: Record<number, DueDateEdit[]>;
+  /** Backlog báo vượt giới hạn request giữa chừng, các id chưa có trong `edits` chưa đọc. */
+  rateLimited: boolean;
+};
+
+export type SubtaskCheck = {
+  task: ChildTask;
+  groupTaskKey: string;
+  actualEndDate: string | null;
+  violations: ComplianceViolation[];
+};
+
+/** Tỷ lệ tuân thủ dữ liệu của 1 người (guideline Tiến độ mục 10). */
+export type MemberCompliance = {
+  assigneeId: number | null;
+  assigneeName: string;
+  total: number;
+  compliant: number;
+  /** 0–1. */
+  rate: number;
+  checks: SubtaskCheck[];
 };
 
 export type ChildTotal = {
@@ -231,4 +288,8 @@ export type GroupTaskRow = {
   actualMismatch: boolean;
   /** G-Task chưa Closed/Cancel mà Due Date <= hôm nay (hoặc chưa điền) — cần vào check để sửa. */
   dueAlert: boolean;
+  /** Subtask BẮT BUỘC theo guideline mà G-Task chưa có, VD "[srs][BA]". */
+  missingRequired: string[];
+  /** Số subtask được đánh giá mà tiêu đề chưa theo quy ước `[mã][Role]`. */
+  offConventionCount: number;
 };

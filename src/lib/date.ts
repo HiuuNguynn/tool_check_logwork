@@ -37,11 +37,15 @@ export function eachDay(from: string, to: string): string[] {
 }
 
 export function todayKey(): string {
-  const now = new Date();
+  return localDateKey(new Date());
+}
+
+/** yyyy-MM-dd theo múi giờ máy đang chạy (Backlog trả thời điểm theo UTC). */
+export function localDateKey(date: Date): string {
   return [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
   ].join("-");
 }
 

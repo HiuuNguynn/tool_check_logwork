@@ -29,7 +29,7 @@ GTask được xem riêng ở tab G-Task của màn PM.
 
 ### Màn PM (`/pm`)
 
-Chọn project + khoảng ngày rồi bấm **Kiểm tra**. Có 2 tab:
+Chọn project + khoảng ngày rồi bấm **Kiểm tra**. Có 3 tab:
 
 - **Log việc theo thành viên** — ma trận thành viên × ngày, ô nào thiếu log / sai rule
   thì tô màu.
@@ -45,6 +45,23 @@ Chọn project + khoảng ngày rồi bấm **Kiểm tra**. Có 2 tab:
     không ghi số cũ nếu task con vừa được sửa). API key cần có quyền sửa ticket.
   - G-Task chưa Closed / Cancel mà `Due Date` <= hôm nay (hoặc chưa điền) → tô đỏ để
     vào check lại. G-Task đã Closed / Cancel thì không check Due Date.
+  - Cột **Subtask bắt buộc** — theo Guideline đo Performance, mỗi G-Task phải có
+    `[srs][BA]`, `[code][BE]` hoặc `[code][FE]`, `[tc][Tester]`, `[itst][Tester]`.
+    Tên subtask phải theo quy ước `[mã][Role] Tên việc`, mã nằm trong danh mục công
+    việc chuẩn của role; bung task con để xem subtask nào sai quy ước.
+    `[ui][Designer]` chỉ bắt buộc khi có màn hình mới nên tool không check.
+- **Tuân thủ dữ liệu** — tỷ lệ subtask đúng quy định dữ liệu theo từng người (dưới
+  90% thì kết quả tiến độ của kỳ cần PQA xác nhận lại). Chỉ xét subtask của các
+  G-Task đang hiển thị, bỏ ticket Bug / Feedback và subtask đã Cancel. Lỗi bị bắt:
+  chưa gán người, thiếu `Due Date`, Closed mà thiếu `Actual End-date`,
+  `Actual End-date` sớm hơn `Start Date`, có `Reschedule` mà thiếu
+  `Reschedule Reason`, lý do nhóm E mà thiếu `Reschedule Evidence` (chỉ khi project
+  đã tạo các field này).
+  - Nút **Kiểm tra lịch sử sửa Due Date** đọc changeLog của từng subtask: đổi
+    `Due Date` từ một hạn đã có sang hạn khác sau ngày đặt hạn ban đầu là vi phạm
+    (phải dùng `Reschedule`). Mỗi subtask tốn ít nhất 1 request, Backlog giới hạn
+    600 request đọc/phút, nên mỗi lượt đọc tối đa 300 subtask; bị chặn giữa chừng
+    thì giữ phần đã đọc, đợi 1 phút rồi bấm **Đọc tiếp**.
 
 ### Rule được kiểm tra
 

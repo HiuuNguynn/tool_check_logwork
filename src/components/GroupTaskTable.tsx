@@ -3,18 +3,21 @@
 import { Fragment, useState } from "react";
 
 import { formatHours } from "@/lib/report";
-import type { ChildTask, GroupTaskRow } from "@/lib/types";
+import { isEvaluatedSubtask, parseSubtaskTag } from "@/lib/subtask";
+import type { ChildTask, GroupTaskRow, SubtaskCheck } from "@/lib/types";
 
 type Props = {
   rows: GroupTaskRow[];
   domain: string;
+  /** Kết quả kiểm tra dữ liệu của từng subtask, key: id subtask. */
+  checks: Map<number, SubtaskCheck>;
   /** Ghi tổng Actual Hours task con vào G-Task; throw nếu Backlog báo lỗi. */
   onUpdate: (issueId: number) => Promise<void>;
 };
 
 const PAGE_SIZES = [20, 50, 100] as const;
 
-export function GroupTaskTable({ rows, domain, onUpdate }: Props) {
+export function GroupTaskTable({ rows, domain, checks, onUpdate }: Props) {
   const [updating, setUpdating] = useState<Set<number>>(new Set());
   const [errors, setErrors] = useState<Record<number, string>>({});
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -81,6 +84,7 @@ export function GroupTaskTable({ rows, domain, onUpdate }: Props) {
               <Th className="w-24 text-right">Estimate</Th>
               <Th className="w-24 text-right">Actual</Th>
               <Th className="whitespace-nowrap text-right">Tổng Actual task con</Th>
+              <Th className="w-44">Subtask bắt buộc</Th>
               <Th />
             </tr>
           </thead>
@@ -150,6 +154,9 @@ export function GroupTaskTable({ rows, domain, onUpdate }: Props) {
                       <div className="text-xs text-slate-400">{row.children.length} task con</div>
                     </Td>
                     <Td>
+                      <RequiredSubtasks row={row} />
+                    </Td>
+                    <Td>
                       {row.actualMismatch ? (
                         <button
                           type="button"
@@ -172,8 +179,8 @@ export function GroupTaskTable({ rows, domain, onUpdate }: Props) {
                   </tr>
                   {isOpen && (
                     <tr className="bg-slate-50/60">
-                      <td colSpan={11} className="py-2 pr-3 pl-11">
-                        <ChildTaskTable tasks={row.children} domain={domain} />
+                      <td colSpan={12} className="py-2 pr-3 pl-11">
+                        <ChildTaskTable tasks={row.children} domain={domain} checks={checks} />
                       </td>
                     </tr>
                   )}
@@ -198,8 +205,47 @@ export function GroupTaskTable({ rows, domain, onUpdate }: Props) {
   );
 }
 
+function RequiredSubtasks({ row }: { row: GroupTaskRow }) {
+  return (
+    <div className="space-y-1">
+      {row.missingRequired.length ? (
+        <div
+          className="flex flex-wrap gap-1"
+          title="Subtask BẮT BUỘC theo guideline mà G-Task chưa có"
+        >
+          {row.missingRequired.map((label) => (
+            <span
+              key={label}
+              className="whitespace-nowrap rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-900"
+            >
+              Thiếu {label}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+          Đủ
+        </span>
+      )}
+      {row.offConventionCount > 0 && (
+        <p className="text-xs text-slate-500">
+          {row.offConventionCount} subtask sai quy ước tên
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Cao vừa khoảng 10 task con, dài hơn thì cuộn — G-Task lớn có tới hàng trăm task con. */
-function ChildTaskTable({ tasks, domain }: { tasks: ChildTask[]; domain: string }) {
+function ChildTaskTable({
+  tasks,
+  domain,
+  checks,
+}: {
+  tasks: ChildTask[];
+  domain: string;
+  checks: Map<number, SubtaskCheck>;
+}) {
   return (
     <div className="max-h-80 overflow-y-auto">
       <table className="w-full text-xs">
@@ -212,39 +258,70 @@ function ChildTaskTable({ tasks, domain }: { tasks: ChildTask[]; domain: string 
             <th className="w-24 py-1 pr-3 font-medium">Start Date</th>
             <th className="w-24 py-1 pr-3 font-medium">Due Date</th>
             <th className="w-20 py-1 pr-3 text-right font-medium">Estimate</th>
-            <th className="w-20 py-1 text-right font-medium">Actual</th>
+            <th className="w-20 py-1 pr-3 text-right font-medium">Actual</th>
+            <th className="w-28 py-1 pr-3 font-medium">Quy ước tên</th>
+            <th className="w-56 py-1 font-medium">Lỗi dữ liệu</th>
           </tr>
         </thead>
         <tbody>
-          {tasks.map((task) => (
-            <tr key={task.id} className="border-t border-slate-200/70">
-              <td className="py-1.5 pr-3">
-                <a
-                  href={`https://${domain}/view/${task.issueKey}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-medium text-blue-700 hover:underline"
-                >
-                  {task.issueKey}
-                </a>
-              </td>
-              <td className="py-1.5 pr-3 text-slate-600">
-                <span className="line-clamp-1" title={task.summary}>
-                  {task.summary}
-                </span>
-              </td>
-              <td className="py-1.5 pr-3 text-slate-600">{task.statusName}</td>
-              <td className="py-1.5 pr-3 text-slate-600">{task.assigneeName}</td>
-              <td className="py-1.5 pr-3 tabular-nums text-slate-600">{task.startDate ?? "—"}</td>
-              <td className="py-1.5 pr-3 tabular-nums text-slate-600">{task.dueDate ?? "—"}</td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">
-                {formatHours(task.estimatedHours)}
-              </td>
-              <td className="py-1.5 text-right tabular-nums font-medium text-slate-800">
-                {formatHours(task.actualHours)}
-              </td>
-            </tr>
-          ))}
+          {tasks.map((task) => {
+            const evaluated = isEvaluatedSubtask(task);
+            const tag = evaluated ? parseSubtaskTag(task.summary) : null;
+            const violations = checks.get(task.id)?.violations ?? [];
+            return (
+              <tr key={task.id} className="border-t border-slate-200/70">
+                <td className="py-1.5 pr-3">
+                  <a
+                    href={`https://${domain}/view/${task.issueKey}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-blue-700 hover:underline"
+                  >
+                    {task.issueKey}
+                  </a>
+                </td>
+                <td className="py-1.5 pr-3 text-slate-600">
+                  <span className="line-clamp-1" title={task.summary}>
+                    {task.summary}
+                  </span>
+                </td>
+                <td className="py-1.5 pr-3 text-slate-600">{task.statusName}</td>
+                <td className="py-1.5 pr-3 text-slate-600">{task.assigneeName}</td>
+                <td className="py-1.5 pr-3 tabular-nums text-slate-600">{task.startDate ?? "—"}</td>
+                <td className="py-1.5 pr-3 tabular-nums text-slate-600">{task.dueDate ?? "—"}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">
+                  {formatHours(task.estimatedHours)}
+                </td>
+                <td className="py-1.5 pr-3 text-right tabular-nums font-medium text-slate-800">
+                  {formatHours(task.actualHours)}
+                </td>
+                <td className="py-1.5 pr-3">
+                  {!evaluated ? (
+                    <span
+                      className="text-slate-400"
+                      title="Bug/Feedback, G-Task hoặc đã Cancel — không đánh giá"
+                    >
+                      —
+                    </span>
+                  ) : tag ? (
+                    <span className="text-emerald-700">
+                      [{tag.code}][{tag.role}]
+                    </span>
+                  ) : (
+                    <span
+                      className="text-amber-800"
+                      title="Tiêu đề cần dạng [mã][Role] Tên việc, mã nằm trong danh mục công việc chuẩn"
+                    >
+                      Sai quy ước
+                    </span>
+                  )}
+                </td>
+                <td className="py-1.5 text-rose-700">
+                  {violations.map((violation) => violation.message).join("; ")}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

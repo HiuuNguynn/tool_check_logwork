@@ -6,9 +6,12 @@ import type {
   BacklogProject,
   BacklogUser,
   ChildTotal,
+  DueDateEdit,
+  DueHistoryResponse,
   GroupTasksResponse,
   IssuesResponse,
 } from "./types";
+import { DUE_HISTORY_LIMIT } from "./compliance";
 import { isFinishedStatus, round2, toChildTask } from "./report";
 
 export const PAGE_SIZE = 100;
@@ -306,4 +309,68 @@ export async function fetchGroupTasks(
     childTotals: children.totals,
     truncated: result.truncated || children.truncated,
   };
+}
+
+type BacklogComment = {
+  id: number;
+  created: string;
+  changeLog?: { field: string; newValue: string | null; originalValue: string | null }[];
+};
+
+const DUE_HISTORY_CONCURRENCY = 5;
+
+/** Mọi lần đổi Due date của 1 issue, đọc từ changeLog (field `limitDate`) trong comment. */
+async function fetchDueEdits(creds: Credentials, issueId: number): Promise<DueDateEdit[]> {
+  const edits: DueDateEdit[] = [];
+  let minId: number | undefined;
+
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const batch = await backlogFetch<BacklogComment[]>(
+      creds,
+      `/issues/${issueId}/comments`,
+      { count: PAGE_SIZE, order: "asc", minId },
+    );
+    for (const comment of batch) {
+      for (const change of comment.changeLog ?? []) {
+        if (change.field !== "limitDate") continue;
+        edits.push({
+          changedAt: comment.created,
+          from: change.originalValue || null,
+          to: change.newValue || null,
+        });
+      }
+    }
+    if (batch.length < PAGE_SIZE) break;
+    minId = batch[batch.length - 1].id + 1;
+  }
+
+  return edits;
+}
+
+export async function fetchDueHistory(
+  creds: Credentials,
+  issueIds: number[],
+): Promise<DueHistoryResponse> {
+  const ids = issueIds.slice(0, DUE_HISTORY_LIMIT);
+  const edits: Record<number, DueDateEdit[]> = {};
+  let cursor = 0;
+  let rateLimited = false;
+
+  // Vượt giới hạn thì dừng và trả phần đã đọc, để client bấm "Đọc tiếp" sau
+  // thay vì mất hết kết quả của cả lượt.
+  async function worker() {
+    while (cursor < ids.length && !rateLimited) {
+      const id = ids[cursor];
+      cursor += 1;
+      try {
+        edits[id] = await fetchDueEdits(creds, id);
+      } catch (error) {
+        if (!(error instanceof BacklogError) || error.status !== 429) throw error;
+        rateLimited = true;
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: DUE_HISTORY_CONCURRENCY }, worker));
+  return { edits, rateLimited };
 }

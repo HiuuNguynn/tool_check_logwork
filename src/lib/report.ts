@@ -1,4 +1,5 @@
 import { eachDay, isWeekend, toDateKey, weekdayOf } from "./date";
+import { checkRequiredSubtasks } from "./subtask";
 import type {
   AcmsDailyData,
   BacklogIssue,
@@ -22,7 +23,7 @@ export function isPaidDayOff(leaveType: LeaveType): boolean {
 }
 
 /** "Re-estimate hours" / "re_estimate hours" / "Re Estimate Hours" -> "reestimatehours" */
-function normalizeFieldName(name: string): string {
+export function normalizeFieldName(name: string): string {
   return name.toLowerCase().replace(/[\s_\-–—/.()]+/g, "");
 }
 
@@ -347,12 +348,20 @@ export function toChildTask(issue: BacklogIssue): ChildTask {
     id: issue.id,
     issueKey: issue.issueKey,
     summary: issue.summary,
+    statusId: issue.status?.id ?? 0,
     statusName: issue.status?.name ?? "",
+    issueTypeName: issue.issueType?.name ?? "",
+    assigneeId: issue.assignee?.id ?? null,
     assigneeName: issue.assignee?.name ?? "(chưa gán)",
     startDate: toDateKey(issue.startDate),
     dueDate: toDateKey(issue.dueDate),
     estimatedHours: toNumber(issue.estimatedHours),
     actualHours: toNumber(issue.actualHours),
+    created: issue.created,
+    customFields: (issue.customFields ?? []).map((field) => ({
+      name: field.name,
+      value: field.value,
+    })),
   };
 }
 
@@ -370,6 +379,7 @@ export function toGroupTaskRow(
   const actualHours = toNumber(issue.actualHours);
   const childActualHours = childTotal?.actualHours ?? 0;
   const dueDate = toDateKey(issue.dueDate);
+  const children = childTotal?.tasks ?? [];
 
   return {
     id: issue.id,
@@ -381,10 +391,11 @@ export function toGroupTaskRow(
     dueDate,
     estimatedHours: toNumber(issue.estimatedHours),
     actualHours,
-    children: childTotal?.tasks ?? [],
+    children,
     childActualHours,
     // G-Task chưa điền Actual và không có giờ con nào thì coi như đã khớp (0 = 0).
     actualMismatch: !sameHours(actualHours ?? 0, childActualHours),
     dueAlert: !isFinishedStatus(issue.status) && (dueDate === null || dueDate <= today),
+    ...checkRequiredSubtasks(children),
   };
 }
